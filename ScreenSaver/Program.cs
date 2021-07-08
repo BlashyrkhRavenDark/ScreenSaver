@@ -17,72 +17,83 @@ namespace ScreenSaver
     {
         /// <summary>
         /// The main entry point for the application.
+        /// Parses arguments and launches relevant section of the program
         /// </summary>
         [STAThread]
-        static void Main(string[] args)
+        static void Main(string[] p_aArgs)
         {
+            string sFirstArg = "";
+            string sSecondArg = null;
+            AlbumCoverFinder.AlbumCoverMgr oCoverMgr;
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-
-            if (args.Length > 0)
-            {
-                string firstArgument = args[0].ToLower().Trim();
-                string secondArgument = null;
-
-                // Handle cases where arguments are separated by colon. 
-                // Examples: /c:1234567 or /P:1234567
-                if (firstArgument.Length > 2)
-                {
-                    secondArgument = firstArgument.Substring(3).Trim();
-                    firstArgument = firstArgument.Substring(0, 2);
-                }
-                else if (args.Length > 1)
-                    secondArgument = args[1];
-                
-                if (firstArgument == "/c")           // Configuration mode
-                {
-                    Application.Run(new SettingsForm());
-                }
-                else if (firstArgument == "/p")      // Preview mode
-                {
-                    if (secondArgument == null)
-                    {
-                        MessageBox.Show("Sorry, but the expected window handle was not provided.",
-                            "ScreenSaver", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                        return;
-                    }
-                    
-                    IntPtr previewWndHandle = new IntPtr(long.Parse(secondArgument));
-                    Application.Run(new ScreenSaverForm(previewWndHandle));
-                }
-                else if (firstArgument == "/s")      // Full-screen mode
-                {
-                    ShowScreenSaver();
-                    Application.Run();
-                }  
-                else    // Undefined argument
-                {
-                    MessageBox.Show("Sorry, but the command line argument \"" + firstArgument +
-                        "\" is not valid.", "ScreenSaver",
-                        MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                }
-            }
-            else    // No arguments - treat like /c
-            {
+            oCoverMgr = new AlbumCoverFinder.AlbumCoverMgr();       // 1 instance of cover manager is enough for multiple screens
+            SortArgs(ref sFirstArg, ref sSecondArg, p_aArgs);       // Let's sort the arguments
+            if (sFirstArg == "")                                    // No arguments - treat like /c
                 Application.Run(new SettingsForm());
-            }            
+            else if (sFirstArg == "/c")                             // Configuration mode
+                Application.Run(new SettingsForm());
+            else if (sFirstArg == "/p")                             // Preview mode
+            {
+                if (sSecondArg == null)
+                {
+                    MessageBox.Show("Sorry, but the expected window handle was not provided.",
+                        "ScreenSaver", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    return;
+                }
+                IntPtr previewWndHandle = new IntPtr(long.Parse(sSecondArg));
+                Application.Run(new ScreenSaverForm(previewWndHandle, oCoverMgr));
+            }
+            else if (sFirstArg == "/s")                             // Full-screen mode
+            {
+                ShowScreenSaver(oCoverMgr);
+                Application.Run();
+            }
+            else                                                    // Undefined argument
+            {
+                MessageBox.Show("Sorry, but the command line argument \"" + sFirstArg +
+                    "\" is not valid.", "ScreenSaver",
+                    MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            }
         }
 
         /// <summary>
         /// Display the form on each of the computer's monitors.
         /// </summary>
-        static void ShowScreenSaver()
+        static void ShowScreenSaver(AlbumCoverFinder.AlbumCoverMgr p_oCoverMgr)
         {
-            foreach (Screen screen in Screen.AllScreens)
+            int i = 0;
+            foreach (Screen oScreen in Screen.AllScreens)
             {
-                ScreenSaverForm screensaver = new ScreenSaverForm(screen.Bounds);
-                screensaver.Show();
-            }           
+                if (i == 0)
+                {
+                    ScreenSaverForm oScreensaver = new ScreenSaverForm(oScreen.Bounds, p_oCoverMgr);
+                    oScreensaver.Show();
+                }
+                i++;
+            }
         }
+
+        /// <summary>
+        /// Returns the first arg from the command line, handles the case where the first arg contains both args separated by a colon (:)
+        /// Possible examples: /c:1234567 or /P 1232154231 or /s
+        /// Argument /p takes a long as second argument as handle to a window within which to draw the screensaver
+        /// </summary>
+        /// <param name="p_aArgs"></param>
+        /// <returns></returns>
+        static void SortArgs(ref string p_sFirstArg, ref string p_sSecondArg, string[] p_aArgs)
+        {
+            if (p_aArgs.Length > 0)
+                p_sFirstArg = p_aArgs[0].ToLower().Trim();
+            if (p_sFirstArg.Length > 2)
+            {
+                p_sSecondArg = p_sFirstArg.Substring(3).Trim();
+                p_sFirstArg = p_sFirstArg.Substring(0, 2);
+            }
+            else if (p_aArgs.Length > 1)
+                p_sSecondArg = p_aArgs[1];
+        }
+
     }
 }

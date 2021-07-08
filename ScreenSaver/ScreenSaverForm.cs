@@ -1,9 +1,5 @@
 ﻿/*
- * ScreenSaverForm.cs
- * By Frank McCown
- * Summer 2010
- * 
- * Feel free to modify this code.
+
  */
 
 using System;
@@ -16,6 +12,7 @@ using System.Text;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using AlbumCoverFinder;
 
 namespace ScreenSaver
 {
@@ -40,21 +37,55 @@ namespace ScreenSaver
 
         private Point mouseLocation;
         private bool previewMode = false;
-        private Random rand = new Random();
+        private Random m_iRand = new Random();
+        // create iX and iY for picturebox size, matching screen bounds / 120, to get correct number of 120 covers to display.
+        private int m_iXCovers = 16;
+        private int m_iYCovers = 9;
+        private PictureBox[,] m_aPictureBoxes;
+        private AlbumCoverMgr m_oCoverMgr;
 
-        public ScreenSaverForm()
+        /// <summary>
+        /// We are creating the screensaver form without any reference,
+        /// so we will assume a generic 16 * 9 1080p screen. 
+        /// We never laumch this, though.
+        /// </summary>
+        /// <param name="pCoverMgr"></param>
+        public ScreenSaverForm(AlbumCoverMgr pCoverMgr)
         {
+            m_oCoverMgr = pCoverMgr;
+            m_aPictureBoxes = new PictureBox[16, 9];
             InitializeComponent();
         }
-
-        public ScreenSaverForm(Rectangle Bounds)
+        /// <summary>
+        ///  We are creating the screensaver form within a parent form,
+        /// so we will compute how many 120*120 images fit in.
+        /// </summary>
+        /// <param name="Bounds">The bounds of the parent form</param>
+        /// <param name="pCoverMgr">A reference to the Cover Manager which manages the picture files</param>
+        public ScreenSaverForm(Rectangle Bounds, AlbumCoverMgr pCoverMgr)
         {
+            m_oCoverMgr = pCoverMgr;
+            m_iXCovers = Bounds.Width / 120;
+            m_iYCovers = Bounds.Height / 120;
+            m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
             InitializeComponent();
             this.Bounds = Bounds;
         }
 
-        public ScreenSaverForm(IntPtr PreviewWndHandle)
+        /// <summary>
+        /// This is the small window inside the screensaver parameter window
+        /// A 2*2 picture table will be enough
+        /// </summary>
+        /// <param name="PreviewWndHandle"></param>
+        /// <param name="pCoverMgr"></param>
+        public ScreenSaverForm(IntPtr PreviewWndHandle, AlbumCoverMgr pCoverMgr)
         {
+            m_oCoverMgr = pCoverMgr;
+            m_iXCovers = 2;
+            m_iYCovers = 2;
+            m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
+
+
             InitializeComponent();
 
             // Set the preview window as the parent of this window
@@ -69,9 +100,6 @@ namespace ScreenSaver
             Size = ParentRect.Size;
             Location = new Point(0, 0);
 
-            // Make text smaller
-            textLabel.Font = new System.Drawing.Font("Arial", 6);
-
             previewMode = true;
         }
 
@@ -82,6 +110,8 @@ namespace ScreenSaver
             Cursor.Hide();            
             TopMost = true;
 
+            InitiatePictureBoxes();
+
             moveTimer.Interval = 1000;
             moveTimer.Tick += new EventHandler(moveTimer_Tick);
             moveTimer.Start();
@@ -89,19 +119,50 @@ namespace ScreenSaver
 
         private void moveTimer_Tick(object sender, System.EventArgs e)
         {
-            // Move text to new location
-            textLabel.Left = rand.Next(Math.Max(1, Bounds.Width - textLabel.Width));
-            textLabel.Top = rand.Next(Math.Max(1, Bounds.Height - textLabel.Height));            
+            ChangePicture();
+        } 
+
+        private void InitiatePictureBoxes()
+        {
+            int iCptX, iCptY = 0;
+
+            for (iCptX = 0; iCptX < m_iXCovers; iCptX++)
+                for (iCptY = 0; iCptY < m_iYCovers; iCptY++)
+                {
+                    m_aPictureBoxes[iCptX, iCptY] = new PictureBox();
+                    m_aPictureBoxes[iCptX, iCptY].Image = m_oCoverMgr.GetRandomPicture();
+                    m_aPictureBoxes[iCptX, iCptY].Height = 120;
+                    m_aPictureBoxes[iCptX, iCptY].Width = 120;
+                    m_aPictureBoxes[iCptX, iCptY].Left = iCptX * 120;
+                    m_aPictureBoxes[iCptX, iCptY].Top = iCptY * 120;
+                    this.Controls.Add(m_aPictureBoxes[iCptX, iCptY]);
+                }
+        }
+
+        private void ChangePicture()
+        {
+            m_aPictureBoxes[m_iRand.Next(0, m_iXCovers - 1), m_iRand.Next(0, m_iYCovers - 1)].Image = m_oCoverMgr.GetRandomPicture();
+        }
+
+        /// <summary>
+        /// Adds a cover to a random screen position (not aligned to the picture grid)
+        /// </summary>
+        private void AddPictureToScreen()
+        {
+            System.Windows.Forms.PictureBox pictureBox = new PictureBox();
+            pictureBox.Image = m_oCoverMgr.GetRandomPicture();
+            pictureBox.Height = 120;
+            pictureBox.Width = 120;
+            pictureBox.Left = m_iRand.Next(Math.Max(1, Bounds.Width - pictureBox.Width));
+            pictureBox.Top = m_iRand.Next(Math.Max(1, Bounds.Height - pictureBox.Height));
+            this.Controls.Add(pictureBox);
+
         }
 
         private void LoadSettings()
         {
             // Use the string from the Registry if it exists
             RegistryKey key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\Demo_ScreenSaver");
-            if (key == null)
-                textLabel.Text = "C# Screen Saver";
-            else
-                textLabel.Text = (string)key.GetValue("text");
         }
 
         private void ScreenSaverForm_MouseMove(object sender, MouseEventArgs e)

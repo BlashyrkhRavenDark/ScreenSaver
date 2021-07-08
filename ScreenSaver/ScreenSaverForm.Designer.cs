@@ -29,20 +29,8 @@
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            this.textLabel = new System.Windows.Forms.Label();
             this.moveTimer = new System.Windows.Forms.Timer(this.components);
             this.SuspendLayout();
-            // 
-            // textLabel
-            // 
-            this.textLabel.AutoSize = true;
-            this.textLabel.Font = new System.Drawing.Font("Arial", 36F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.textLabel.ForeColor = System.Drawing.Color.Red;
-            this.textLabel.Location = new System.Drawing.Point(25, 58);
-            this.textLabel.Name = "textLabel";
-            this.textLabel.Size = new System.Drawing.Size(466, 55);
-            this.textLabel.TabIndex = 0;
-            this.textLabel.Text = "Hello, Screen Saver!";
             // 
             // ScreenSaverForm
             // 
@@ -50,7 +38,6 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.Black;
             this.ClientSize = new System.Drawing.Size(508, 260);
-            this.Controls.Add(this.textLabel);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
             this.Name = "ScreenSaverForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
@@ -60,13 +47,10 @@
             this.MouseClick += new System.Windows.Forms.MouseEventHandler(this.ScreenSaverForm_MouseClick);
             this.MouseMove += new System.Windows.Forms.MouseEventHandler(this.ScreenSaverForm_MouseMove);
             this.ResumeLayout(false);
-            this.PerformLayout();
 
         }
 
         #endregion
-
-        private System.Windows.Forms.Label textLabel;
         private System.Windows.Forms.Timer moveTimer;
     }
 }
