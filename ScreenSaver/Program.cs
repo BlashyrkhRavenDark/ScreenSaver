@@ -28,13 +28,13 @@ namespace ScreenSaver
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            oCoverMgr = new AlbumCoverFinder.AlbumCoverMgr();       // 1 instance of cover manager is enough for multiple screens
-            SortArgs(ref sFirstArg, ref sSecondArg, p_aArgs);       // Let's sort the arguments
-            if (sFirstArg == "")                                    // No arguments - treat like /c
+            oCoverMgr = new AlbumCoverFinder.AlbumCoverMgr();               // 1 instance of cover manager is enough for multiple screens
+            ParseCommandLineArgs(ref sFirstArg, ref sSecondArg, p_aArgs);   // Let's sort the arguments
+            if (sFirstArg == "")                                            // No arguments - treat like /c
                 Application.Run(new SettingsForm());
-            else if (sFirstArg == "/c")                             // Configuration mode
+            else if (sFirstArg == "/c")                                     // Configuration mode
                 Application.Run(new SettingsForm());
-            else if (sFirstArg == "/p")                             // Preview mode
+            else if (sFirstArg == "/p")                                     // Preview mode
             {
                 if (sSecondArg == null)
                 {
@@ -45,12 +45,12 @@ namespace ScreenSaver
                 IntPtr previewWndHandle = new IntPtr(long.Parse(sSecondArg));
                 Application.Run(new ScreenSaverForm(previewWndHandle, oCoverMgr));
             }
-            else if (sFirstArg == "/s")                             // Full-screen mode
+            else if (sFirstArg == "/s")                                     // Full-screen mode
             {
                 ShowScreenSaver(oCoverMgr);
                 Application.Run();
             }
-            else                                                    // Undefined argument
+            else                                                            // Undefined argument
             {
                 MessageBox.Show("Sorry, but the command line argument \"" + sFirstArg +
                     "\" is not valid.", "ScreenSaver",
@@ -82,7 +82,7 @@ namespace ScreenSaver
         /// </summary>
         /// <param name="p_aArgs"></param>
         /// <returns></returns>
-        static void SortArgs(ref string p_sFirstArg, ref string p_sSecondArg, string[] p_aArgs)
+        static void ParseCommandLineArgs(ref string p_sFirstArg, ref string p_sSecondArg, string[] p_aArgs)
         {
             if (p_aArgs.Length > 0)
                 p_sFirstArg = p_aArgs[0].ToLower().Trim();

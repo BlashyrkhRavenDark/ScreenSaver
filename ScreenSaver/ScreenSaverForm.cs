@@ -44,6 +44,8 @@ namespace ScreenSaver
         private PictureBox[,] m_aPictureBoxes;
         private AlbumCoverMgr m_oCoverMgr;
 
+        #region Constructors
+
         /// <summary>
         /// We are creating the screensaver form without any reference,
         /// so we will assume a generic 16 * 9 1080p screen. 
@@ -84,34 +86,33 @@ namespace ScreenSaver
             m_iXCovers = 2;
             m_iYCovers = 2;
             m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
-
-
             InitializeComponent();
 
             // Set the preview window as the parent of this window
             SetParent(this.Handle, PreviewWndHandle);
-
             // Make this a child window so it will close when the parent dialog closes
             SetWindowLong(this.Handle, -16, new IntPtr(GetWindowLong(this.Handle, -16) | 0x40000000));
-
             // Place our window inside the parent
             Rectangle ParentRect;
             GetClientRect(PreviewWndHandle, out ParentRect);
             Size = ParentRect.Size;
             Location = new Point(0, 0);
-
             previewMode = true;
         }
 
+        #endregion
+
+        /// <summary>
+        /// Our form is being loaded on screen. Let's set everything up.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void ScreenSaverForm_Load(object sender, EventArgs e)
         {            
             LoadSettings();
-
             Cursor.Hide();            
             TopMost = true;
-
             InitiatePictureBoxes();
-
             moveTimer.Interval = 1000;
             moveTimer.Tick += new EventHandler(moveTimer_Tick);
             moveTimer.Start();
