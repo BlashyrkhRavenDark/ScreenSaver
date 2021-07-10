@@ -265,7 +265,7 @@ namespace AlbumCoverFinder
 
                 if (!m_dPictures.ContainsKey(sKey) && oFile.TagHandler.Picture != null)
                 {
-                    oImage = ResizeImage(oFile.TagHandler.Picture, 120, 120);
+                    oImage = ResizeImage(oFile.TagHandler.Picture, 128, 120);
                     m_dPictures.Add(sKey, oImage);
                     m_aReadFiles.Add(p_sFile);
                     if (oAlbumFoundEvent != null)

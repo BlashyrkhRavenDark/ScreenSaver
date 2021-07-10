@@ -67,7 +67,7 @@ namespace ScreenSaver
         public ScreenSaverForm(Rectangle Bounds, AlbumCoverMgr pCoverMgr)
         {
             m_oCoverMgr = pCoverMgr;
-            m_iXCovers = Bounds.Width / 120;
+            m_iXCovers = Bounds.Width / 128;
             m_iYCovers = Bounds.Height / 120;
             m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
             InitializeComponent();
@@ -133,8 +133,8 @@ namespace ScreenSaver
                     m_aPictureBoxes[iCptX, iCptY] = new PictureBox();
                     m_aPictureBoxes[iCptX, iCptY].Image = m_oCoverMgr.GetRandomPicture();
                     m_aPictureBoxes[iCptX, iCptY].Height = 120;
-                    m_aPictureBoxes[iCptX, iCptY].Width = 120;
-                    m_aPictureBoxes[iCptX, iCptY].Left = iCptX * 120;
+                    m_aPictureBoxes[iCptX, iCptY].Width = 128;
+                    m_aPictureBoxes[iCptX, iCptY].Left = iCptX * 128;
                     m_aPictureBoxes[iCptX, iCptY].Top = iCptY * 120;
                     this.Controls.Add(m_aPictureBoxes[iCptX, iCptY]);
                 }
@@ -153,7 +153,7 @@ namespace ScreenSaver
             System.Windows.Forms.PictureBox pictureBox = new PictureBox();
             pictureBox.Image = m_oCoverMgr.GetRandomPicture();
             pictureBox.Height = 120;
-            pictureBox.Width = 120;
+            pictureBox.Width = 128;
             pictureBox.Left = m_iRand.Next(Math.Max(1, Bounds.Width - pictureBox.Width));
             pictureBox.Top = m_iRand.Next(Math.Max(1, Bounds.Height - pictureBox.Height));
             this.Controls.Add(pictureBox);
