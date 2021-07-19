@@ -66,11 +66,8 @@ namespace ScreenSaver
             int i = 0;
             foreach (Screen oScreen in Screen.AllScreens)
             {
-                if (i == 0)
-                {
-                    ScreenSaverForm oScreensaver = new ScreenSaverForm(oScreen.Bounds, p_oCoverMgr);
-                    oScreensaver.Show();
-                }
+                ScreenSaverForm oScreensaver = new ScreenSaverForm(oScreen.Bounds, p_oCoverMgr);
+                oScreensaver.Show();
                 i++;
             }
         }

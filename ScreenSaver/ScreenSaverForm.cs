@@ -99,7 +99,6 @@ namespace ScreenSaver
             Location = new Point(0, 0);
             previewMode = true;
         }
-
         #endregion
 
         /// <summary>
