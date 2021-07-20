@@ -1,15 +1,8 @@
-﻿/*
- * Program.cs
- * By Frank McCown
- * Summer 2010
- * 
- * Feel free to modify this code.
- */
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
+using AlbumCoverFinder;
 
 namespace ScreenSaver
 {
@@ -30,10 +23,11 @@ namespace ScreenSaver
             Application.SetCompatibleTextRenderingDefault(false);
             oCoverMgr = new AlbumCoverFinder.AlbumCoverMgr();               // 1 instance of cover manager is enough for multiple screens
             ParseCommandLineArgs(ref sFirstArg, ref sSecondArg, p_aArgs);   // Let's sort the arguments
+
             if (sFirstArg == "")                                            // No arguments - treat like /c
-                Application.Run(new SettingsForm());
+                Application.Run(new AlbumCoverFinderForm());
             else if (sFirstArg == "/c")                                     // Configuration mode
-                Application.Run(new SettingsForm());
+                Application.Run(new AlbumCoverFinderForm());
             else if (sFirstArg == "/p")                                     // Preview mode
             {
                 if (sSecondArg == null)

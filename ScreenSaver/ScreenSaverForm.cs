@@ -141,7 +141,7 @@ namespace ScreenSaver
 
         private void ChangePicture()
         {
-            m_aPictureBoxes[m_iRand.Next(0, m_iXCovers - 1), m_iRand.Next(0, m_iYCovers - 1)].Image = m_oCoverMgr.GetRandomPicture();
+            m_aPictureBoxes[m_iRand.Next(0, m_iXCovers), m_iRand.Next(0, m_iYCovers)].Image = m_oCoverMgr.GetRandomPicture();
         }
 
         /// <summary>
