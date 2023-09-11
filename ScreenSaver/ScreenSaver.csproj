@@ -62,6 +62,9 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
+    <Reference Include="TagLibSharp, Version=2.3.0.0, Culture=neutral, PublicKeyToken=db62eba44689b5b0, processorArchitecture=MSIL">
+      <HintPath>..\packages\TagLibSharp.2.3.0\lib\net462\TagLibSharp.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ScreenMgr.cs" />
@@ -87,6 +90,7 @@
       <DependentUpon>ScreenSaverForm.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="app.config" />
+    <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -98,14 +102,6 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\id3lib Solution\ID3Lib\Id3Lib.csproj">
-      <Project>{4c0e405b-fbe5-4949-8953-0b4aeb0d22b8}</Project>
-      <Name>Id3Lib</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\..\id3lib Solution\Mp3Lib\Mp3Lib.csproj">
-      <Project>{e16e2254-a7a2-4e45-95b9-8613c67b3fd4}</Project>
-      <Name>Mp3Lib</Name>
-    </ProjectReference>
     <ProjectReference Include="..\AlbumCoverFinder\AlbumCoverFinder.csproj">
       <Project>{20e2a73b-86ce-43b3-8dca-b069712441a2}</Project>
       <Name>AlbumCoverFinder</Name>

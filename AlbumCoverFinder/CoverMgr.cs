@@ -6,7 +6,8 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Linq;
-using Mp3Lib;
+using TagLib;
+
 
 namespace AlbumCoverFinder
 {
@@ -115,8 +116,8 @@ namespace AlbumCoverFinder
                 m_dPictures = new Dictionary<string, Image>();
             try
             {
-                if (File.Exists(m_sConfigFile))
-                    File.Delete(m_sConfigFile);
+                if (System.IO.File.Exists(m_sConfigFile))
+                    System.IO.File.Delete(m_sConfigFile);
             }
             catch
             {
@@ -175,7 +176,7 @@ namespace AlbumCoverFinder
 
             try
             {
-                var files = Directory.EnumerateFiles(m_sMusicPath, "*.mp3", SearchOption.AllDirectories);
+                var files = Directory.EnumerateFiles(m_sMusicPath, "*.mp3,*.wma,*.mp4,*.m4a", SearchOption.AllDirectories);
                 foreach (string sCurrentFile in files)
                 {
                     if (!m_aReadFiles.Contains(sCurrentFile))
@@ -215,10 +216,10 @@ namespace AlbumCoverFinder
             Stream openFileStream = null;
             try
             {
-                if (File.Exists(m_sConfigFile))
+                if (System.IO.File.Exists(m_sConfigFile))
                 {
                     Console.WriteLine("Reading saved file");
-                    openFileStream = File.OpenRead(m_sConfigFile);
+                    openFileStream = System.IO.File.OpenRead(m_sConfigFile);
                     BinaryFormatter deserializer = new BinaryFormatter();
                     m_dPictures = (Dictionary<string, Image>)deserializer.Deserialize(openFileStream);
                     openFileStream.Close();
@@ -234,7 +235,7 @@ namespace AlbumCoverFinder
                 m_dPictures = new Dictionary<string, Image>();
                 if (openFileStream != null)
                     openFileStream.Close();
-                File.Delete(m_sConfigFile);
+                System.IO.File.Delete(m_sConfigFile);
             }
 
         }
@@ -245,7 +246,7 @@ namespace AlbumCoverFinder
                 return;
             try
             {
-                Stream SaveFileStream = File.Create(m_sConfigFile);
+                Stream SaveFileStream = System.IO.File.Create(m_sConfigFile);
                 BinaryFormatter serializer = new BinaryFormatter();
                 serializer.Serialize(SaveFileStream, m_dPictures);
                 SaveFileStream.Close();
@@ -260,12 +261,13 @@ namespace AlbumCoverFinder
             Bitmap oImage;
             try
             {
-                Mp3File oFile = new Mp3File(p_sFile);
-                sKey = oFile.TagHandler.Artist + oFile.TagHandler.Album;
+                TagLib.File oFile = TagLib.File.Create(p_sFile);
+                sKey = oFile.Tag.Performers + oFile.Tag.Album;
 
-                if (!m_dPictures.ContainsKey(sKey) && oFile.TagHandler.Picture != null)
+                if (!m_dPictures.ContainsKey(sKey) && oFile.Tag.Pictures.Length > 0 && oFile.Tag.Pictures[0].Type != PictureType.NotAPicture)
                 {
-                    oImage = ResizeImage(oFile.TagHandler.Picture, 128, 120);
+                    MemoryStream ms = new MemoryStream(oFile.Tag.Pictures[0].Data.Data);
+                    oImage = ResizeImage(Image.FromStream(ms), 128, 120);
                     m_dPictures.Add(sKey, oImage);
                     m_aReadFiles.Add(p_sFile);
                     if (oAlbumFoundEvent != null)
