@@ -7,7 +7,9 @@ using System.Collections.Generic;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Linq;
 using TagLib;
-
+using System.Windows.Forms;
+using System.Text;
+using System.Drawing.Imaging;
 
 namespace AlbumCoverFinder
 {
@@ -28,12 +30,12 @@ namespace AlbumCoverFinder
     public class AlbumCoverMgr
     {
         #region Class Members
+        private string m_sConfigFolder;
         private string m_sConfigFile;
-        private int m_iLastBackupCount = 0;
         private string m_sMusicPath;
         private Dictionary<string, Image> m_dPictures;
         private ArrayList m_aReadFiles;
-        private static int m_iMaxPicCount = 5000;
+        private static int m_iMaxPicCount = 200;
         private Random m_iRand = new Random();
         private Thread m_oThread;
         public delegate void AlbumFound(int p_iAlbumFounds, Image p_oPicture);
@@ -48,8 +50,7 @@ namespace AlbumCoverFinder
         public AlbumCoverMgr(string p_sCustomMusicPath)
         {
             m_sMusicPath = p_sCustomMusicPath;
-            m_sConfigFile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\ScreenSaverPictures.bin";
-            LoadBackupData();
+            AlbumCoverMgrInit();
         }
 
         /// <summary>
@@ -58,10 +59,21 @@ namespace AlbumCoverFinder
         public AlbumCoverMgr()
         {
             m_sMusicPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            m_sConfigFile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\ScreenSaverPictures.bin";
-            LoadBackupData();
+            AlbumCoverMgrInit();
         }
 
+        /// <summary>
+        /// Initialises common variables.
+        /// </summary>
+        public void AlbumCoverMgrInit()
+        {
+            m_sConfigFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\ScreenSaverPictures\\";
+            m_sConfigFile = m_sConfigFolder + "ScreenSaverPictures.bin";
+            m_aReadFiles = new ArrayList();
+            if (!Directory.Exists(m_sConfigFolder))
+                Directory.CreateDirectory(m_sConfigFolder);
+            LoadBackupData();
+        }
         #endregion
 
         #region Public Functions
@@ -164,6 +176,27 @@ namespace AlbumCoverFinder
 
 
 
+        /// <summary>
+        /// Returns an array of string containing audio files from a directory
+        /// p_sExtensionFilter must be an array of strings that will filter files according to their extention, like:
+        /// string[] sAudioExtensions = { ".mp3", ".m4a", ".flac", ".ogg" };
+        /// </summary>
+        static string[] GetFilesWithSuffix(string p_sdirectoryPath, string [] p_sExtensionFilter)
+        {
+            List<string> audioFiles = new List<string>();
+
+            try
+            {
+                // Get all files in the current directory and its subdirectories
+                string[] files = Directory.GetFiles(p_sdirectoryPath, "*.*", SearchOption.AllDirectories);
+                audioFiles = files.Where(file => p_sExtensionFilter.Contains(Path.GetExtension(file).ToLower())).ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("An error occurred: " + ex.Message);
+            }
+            return audioFiles.ToArray();
+        }
 
         /// <summary>
         /// Main Cover Manager thread.
@@ -171,18 +204,18 @@ namespace AlbumCoverFinder
         /// </summary>
         private void RunCoverMrg()
         {
-
-            m_aReadFiles = new ArrayList();
-
             try
             {
-                var files = Directory.EnumerateFiles(m_sMusicPath, "*.mp3,*.wma,*.mp4,*.m4a", SearchOption.AllDirectories);
-                foreach (string sCurrentFile in files)
+                string[] sAudioExtensions = { ".mp3", ".m4a", ".flac", ".ogg" };
+                string[] sAudioFiles = GetFilesWithSuffix(m_sMusicPath, sAudioExtensions);
+                foreach (string sCurrentFile in sAudioFiles)
                 {
                     if (!m_aReadFiles.Contains(sCurrentFile))
                         AddInfoAndPictureFromFile(sCurrentFile);
+                    m_aReadFiles.Add(sCurrentFile);
 
                     // Check if we've reached the album count softcap. If we do, we send a last event and break the foreach.
+                    //// todo why launch a last event?
                     if (m_dPictures.Count > m_iMaxPicCount)
                     {
                         if (oAlbumFoundEvent != null)
@@ -190,7 +223,6 @@ namespace AlbumCoverFinder
                         break;
                     }
                 }
-                SaveBackupData(m_dPictures.Count);
             }
             catch (UnauthorizedAccessException uAEx)
             {
@@ -213,46 +245,42 @@ namespace AlbumCoverFinder
         /// </summary>
         private void LoadBackupData()
         {
-            Stream openFileStream = null;
             try
             {
-                if (System.IO.File.Exists(m_sConfigFile))
-                {
-                    Console.WriteLine("Reading saved file");
-                    openFileStream = System.IO.File.OpenRead(m_sConfigFile);
-                    BinaryFormatter deserializer = new BinaryFormatter();
-                    m_dPictures = (Dictionary<string, Image>)deserializer.Deserialize(openFileStream);
-                    openFileStream.Close();
-                    if (oAlbumFoundEvent != null)
-                        oAlbumFoundEvent(m_dPictures.Count, GetRandomPicture());
-
-                }
-                else
-                    m_dPictures = new Dictionary<string, Image>();
-            }
-            catch
-            {
+                // Let's get a list of all .png files we saved in our configuration folder
                 m_dPictures = new Dictionary<string, Image>();
-                if (openFileStream != null)
-                    openFileStream.Close();
-                System.IO.File.Delete(m_sConfigFile);
+                string[] sPngExtension = { ".png" };
+                string[] sPngFiles = GetFilesWithSuffix(m_sConfigFolder, sPngExtension);
+
+                foreach (string sCurrentFile in sPngFiles)
+                {
+                    // files should be Artist - Album.png. We'll use that as a key and load them into the dict.
+                    string sFilenameAsArtistAlbum = Path.GetFileNameWithoutExtension(sCurrentFile);
+                    if (!m_dPictures.ContainsKey(sFilenameAsArtistAlbum))
+                        m_dPictures.Add(sFilenameAsArtistAlbum, new Bitmap(sCurrentFile));
+
+                    // Check if we've reached the album count softcap. If we do, we send a last event and break the foreach.
+                    //// todo why launch a last event?
+                    if (m_dPictures.Count > m_iMaxPicCount)
+                    {
+                        if (oAlbumFoundEvent != null)
+                            oAlbumFoundEvent(m_dPictures.Count, GetRandomPicture());
+                        break;
+                    }
+                }
+
             }
-
-        }
-
-        private void SaveBackupData(int p_iLastCount)
-        {
-            if (p_iLastCount == m_iLastBackupCount)
-                return;
-            try
+            catch (UnauthorizedAccessException uAEx)
             {
-                Stream SaveFileStream = System.IO.File.Create(m_sConfigFile);
-                BinaryFormatter serializer = new BinaryFormatter();
-                serializer.Serialize(SaveFileStream, m_dPictures);
-                SaveFileStream.Close();
-                m_iLastBackupCount = p_iLastCount;
+                Console.WriteLine(uAEx.Message);
             }
-            catch { }
+            catch (PathTooLongException pathEx)
+            {
+                Console.WriteLine(pathEx.Message);
+            }
+
+            return;
+
         }
 
         private bool AddInfoAndPictureFromFile(string p_sFile)
@@ -261,22 +289,26 @@ namespace AlbumCoverFinder
             Bitmap oImage;
             try
             {
+
+
                 TagLib.File oFile = TagLib.File.Create(p_sFile);
-                sKey = oFile.Tag.Performers + oFile.Tag.Album;
+                sKey = oFile.Tag.Performers[0] + " - " + oFile.Tag.Album;
 
                 if (!m_dPictures.ContainsKey(sKey) && oFile.Tag.Pictures.Length > 0 && oFile.Tag.Pictures[0].Type != PictureType.NotAPicture)
                 {
                     MemoryStream ms = new MemoryStream(oFile.Tag.Pictures[0].Data.Data);
-                    oImage = ResizeImage(Image.FromStream(ms), 128, 120);
+                    oImage = ResizeImage(Image.FromStream(ms), 384, 360);
+                    oImage.Save(m_sConfigFolder + sKey + ".png");
                     m_dPictures.Add(sKey, oImage);
-                    m_aReadFiles.Add(p_sFile);
+                    /// todo what are we doing with this event?
                     if (oAlbumFoundEvent != null)
                         oAlbumFoundEvent(m_dPictures.Count, oImage);
                 }
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine("An error occurred: " + ex.Message);
                 return false;
             }
         }
