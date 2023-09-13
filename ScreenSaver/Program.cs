@@ -25,7 +25,11 @@ namespace ScreenSaver
             ParseCommandLineArgs(ref sFirstArg, ref sSecondArg, p_aArgs);   // Let's sort the arguments
 
             if (sFirstArg == "")                                            // No arguments - treat like /c
+            {
                 Application.Run(new AlbumCoverFinderForm());
+                //ShowScreenSaver(oCoverMgr);
+                //Application.Run();
+            } 
             else if (sFirstArg == "/c")                                     // Configuration mode
                 Application.Run(new AlbumCoverFinderForm());
             else if (sFirstArg == "/p")                                     // Preview mode

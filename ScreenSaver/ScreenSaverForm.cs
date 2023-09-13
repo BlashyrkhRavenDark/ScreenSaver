@@ -39,8 +39,10 @@ namespace ScreenSaver
         private bool previewMode = false;
         private Random m_iRand = new Random();
         // create iX and iY for picturebox size, matching screen bounds / 120, to get correct number of 120 covers to display.
-        private int m_iXCovers = 16;
-        private int m_iYCovers = 9;
+        private int m_iCoverHeight;
+        private int m_iCoverWidth;
+        private int m_iXCovers;
+        private int m_iYCovers;
         private PictureBox[,] m_aPictureBoxes;
         private AlbumCoverMgr m_oCoverMgr;
 
@@ -109,12 +111,17 @@ namespace ScreenSaver
         private void ScreenSaverForm_Load(object sender, EventArgs e)
         {            
             LoadSettings();
+            m_iXCovers = 5;
+            m_iYCovers = 3;
+            m_iCoverWidth = this.Width / m_iXCovers; // 16 covers horizontally
+            m_iCoverHeight = this.Height / m_iYCovers; // 9 covers vertically
             Cursor.Hide();            
             TopMost = true;
             InitiatePictureBoxes();
             moveTimer.Interval = 1000;
             moveTimer.Tick += new EventHandler(moveTimer_Tick);
             moveTimer.Start();
+            
         }
 
         private void moveTimer_Tick(object sender, System.EventArgs e)
@@ -131,10 +138,10 @@ namespace ScreenSaver
                 {
                     m_aPictureBoxes[iCptX, iCptY] = new PictureBox();
                     m_aPictureBoxes[iCptX, iCptY].Image = m_oCoverMgr.GetRandomPicture();
-                    m_aPictureBoxes[iCptX, iCptY].Height = 120;
-                    m_aPictureBoxes[iCptX, iCptY].Width = 128;
-                    m_aPictureBoxes[iCptX, iCptY].Left = iCptX * 128;
-                    m_aPictureBoxes[iCptX, iCptY].Top = iCptY * 120;
+                    m_aPictureBoxes[iCptX, iCptY].Height = m_iCoverHeight;
+                    m_aPictureBoxes[iCptX, iCptY].Width = m_iCoverWidth;
+                    m_aPictureBoxes[iCptX, iCptY].Left = iCptX * m_iCoverWidth;
+                    m_aPictureBoxes[iCptX, iCptY].Top = iCptY * m_iCoverHeight;
                     this.Controls.Add(m_aPictureBoxes[iCptX, iCptY]);
                 }
         }
@@ -151,8 +158,8 @@ namespace ScreenSaver
         {
             System.Windows.Forms.PictureBox pictureBox = new PictureBox();
             pictureBox.Image = m_oCoverMgr.GetRandomPicture();
-            pictureBox.Height = 120;
-            pictureBox.Width = 128;
+            pictureBox.Height = m_iCoverHeight;
+            pictureBox.Width = m_iCoverWidth;
             pictureBox.Left = m_iRand.Next(Math.Max(1, Bounds.Width - pictureBox.Width));
             pictureBox.Top = m_iRand.Next(Math.Max(1, Bounds.Height - pictureBox.Height));
             this.Controls.Add(pictureBox);
