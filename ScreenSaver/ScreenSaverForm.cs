@@ -49,31 +49,22 @@ namespace ScreenSaver
         #region Constructors
 
         /// <summary>
-        /// We are creating the screensaver form without any reference,
-        /// so we will assume a generic 16 * 9 1080p screen. 
-        /// We never laumch this, though.
-        /// </summary>
-        /// <param name="pCoverMgr"></param>
-        public ScreenSaverForm(AlbumCoverMgr pCoverMgr)
-        {
-            m_oCoverMgr = pCoverMgr;
-            m_aPictureBoxes = new PictureBox[16, 9];
-            InitializeComponent();
-        }
-        /// <summary>
-        ///  We are creating the screensaver form within a parent form,
-        /// so we will compute how many 120*120 images fit in.
+        /// We are creating the screensaver form within a parent form, fitting 5x3 covers
+        /// We compute the size of the covers to fit 5x3 in the screen 
         /// </summary>
         /// <param name="Bounds">The bounds of the parent form</param>
         /// <param name="pCoverMgr">A reference to the Cover Manager which manages the picture files</param>
         public ScreenSaverForm(Rectangle Bounds, AlbumCoverMgr pCoverMgr)
         {
-            m_oCoverMgr = pCoverMgr;
-            m_iXCovers = Bounds.Width / 128;
-            m_iYCovers = Bounds.Height / 120;
-            m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
             InitializeComponent();
+            m_oCoverMgr = pCoverMgr;
             this.Bounds = Bounds;
+            m_iXCovers = 5; // 5 covers horizontally
+            m_iYCovers = 3; // 3 covers vertically
+            m_iCoverWidth = this.Width / m_iXCovers;
+            m_iCoverHeight = this.Height / m_iYCovers;
+            m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
+            
         }
 
         /// <summary>
@@ -84,11 +75,13 @@ namespace ScreenSaver
         /// <param name="pCoverMgr"></param>
         public ScreenSaverForm(IntPtr PreviewWndHandle, AlbumCoverMgr pCoverMgr)
         {
+            InitializeComponent();
             m_oCoverMgr = pCoverMgr;
             m_iXCovers = 2;
             m_iYCovers = 2;
+            m_iCoverWidth = 50;
+            m_iCoverHeight = 50;
             m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
-            InitializeComponent();
 
             // Set the preview window as the parent of this window
             SetParent(this.Handle, PreviewWndHandle);
@@ -111,17 +104,12 @@ namespace ScreenSaver
         private void ScreenSaverForm_Load(object sender, EventArgs e)
         {            
             LoadSettings();
-            m_iXCovers = 5;
-            m_iYCovers = 3;
-            m_iCoverWidth = this.Width / m_iXCovers; // 16 covers horizontally
-            m_iCoverHeight = this.Height / m_iYCovers; // 9 covers vertically
             Cursor.Hide();            
             TopMost = true;
             InitiatePictureBoxes();
             moveTimer.Interval = 1000;
             moveTimer.Tick += new EventHandler(moveTimer_Tick);
             moveTimer.Start();
-            
         }
 
         private void moveTimer_Tick(object sender, System.EventArgs e)
@@ -137,18 +125,18 @@ namespace ScreenSaver
                 for (iCptY = 0; iCptY < m_iYCovers; iCptY++)
                 {
                     m_aPictureBoxes[iCptX, iCptY] = new PictureBox();
-                    m_aPictureBoxes[iCptX, iCptY].Image = m_oCoverMgr.GetRandomPicture();
+                    m_aPictureBoxes[iCptX, iCptY].Image = m_oCoverMgr.GetRandomPicture(m_iCoverWidth, m_iCoverHeight);
                     m_aPictureBoxes[iCptX, iCptY].Height = m_iCoverHeight;
                     m_aPictureBoxes[iCptX, iCptY].Width = m_iCoverWidth;
                     m_aPictureBoxes[iCptX, iCptY].Left = iCptX * m_iCoverWidth;
                     m_aPictureBoxes[iCptX, iCptY].Top = iCptY * m_iCoverHeight;
                     this.Controls.Add(m_aPictureBoxes[iCptX, iCptY]);
-                }
+                } 
         }
 
         private void ChangePicture()
         {
-            m_aPictureBoxes[m_iRand.Next(0, m_iXCovers), m_iRand.Next(0, m_iYCovers)].Image = m_oCoverMgr.GetRandomPicture();
+            m_aPictureBoxes[m_iRand.Next(0, m_iXCovers), m_iRand.Next(0, m_iYCovers)].Image = m_oCoverMgr.GetRandomPicture(m_iCoverWidth, m_iCoverHeight);
         }
 
         /// <summary>
@@ -157,13 +145,12 @@ namespace ScreenSaver
         private void AddPictureToScreen()
         {
             System.Windows.Forms.PictureBox pictureBox = new PictureBox();
-            pictureBox.Image = m_oCoverMgr.GetRandomPicture();
+            pictureBox.Image = m_oCoverMgr.GetRandomPicture(m_iCoverWidth, m_iCoverHeight);
             pictureBox.Height = m_iCoverHeight;
             pictureBox.Width = m_iCoverWidth;
             pictureBox.Left = m_iRand.Next(Math.Max(1, Bounds.Width - pictureBox.Width));
             pictureBox.Top = m_iRand.Next(Math.Max(1, Bounds.Height - pictureBox.Height));
             this.Controls.Add(pictureBox);
-
         }
 
         private void LoadSettings()

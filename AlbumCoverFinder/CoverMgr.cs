@@ -35,7 +35,7 @@ namespace AlbumCoverFinder
         private string m_sMusicPath;
         private Dictionary<string, Image> m_dPictures;
         private ArrayList m_aReadFiles;
-        private static int m_iMaxPicCount = 200;
+        private static int m_iMaxPicCount = 200; // max number of covers to load in memory. provides enough variety at managed memory cost
         private Random m_iRand = new Random();
         private Thread m_oThread;
         public delegate void AlbumFound(int p_iAlbumFounds, Image p_oPicture);
@@ -99,7 +99,7 @@ namespace AlbumCoverFinder
             ParseDirectoryForPictures();
         }
 
-
+        /// returns a random picture from our list
         public Image GetRandomPicture()
         {
             if (m_dPictures.Count > 0)
@@ -108,8 +108,19 @@ namespace AlbumCoverFinder
                 return lImages[m_iRand.Next(m_dPictures.Count - 1)];
             }
             else
-                return new Bitmap(120, 120);
-            //Bitmap(120, 120, System.Drawing.Imaging.PixelFormat.DontCare);
+                return new Bitmap(384, 360);
+        }
+
+        /// returns a random picture from our list, but resized to a specific height and width.
+        public Image GetRandomPicture(int p_iWidth, int p_iHeight)
+        {
+            if (m_dPictures.Count > 0)
+            {
+                List<Image> lImages = Enumerable.ToList(m_dPictures.Values);
+                return ResizeImage(lImages[m_iRand.Next(m_dPictures.Count - 1)], p_iWidth, p_iHeight);
+            }
+            else
+                return new Bitmap(p_iHeight, p_iWidth);
         }
 
         public int GetAlbumTotal()
@@ -122,20 +133,7 @@ namespace AlbumCoverFinder
         /// </summary>
         public void DeleteAlbumBackup()
         {
-            if (m_dPictures != null)
-                m_dPictures.Clear();
-            else
-                m_dPictures = new Dictionary<string, Image>();
-            try
-            {
-                if (System.IO.File.Exists(m_sConfigFile))
-                    System.IO.File.Delete(m_sConfigFile);
-            }
-            catch
-            {
-                return;
-            }
-            oAlbumFoundEvent(0, GetRandomPicture());
+           
         }
 
         #endregion
@@ -208,6 +206,7 @@ namespace AlbumCoverFinder
             {
                 string[] sAudioExtensions = { ".mp3", ".m4a", ".flac", ".ogg" };
                 string[] sAudioFiles = GetFilesWithSuffix(m_sMusicPath, sAudioExtensions);
+
                 foreach (string sCurrentFile in sAudioFiles)
                 {
                     if (!m_aReadFiles.Contains(sCurrentFile))
@@ -236,7 +235,18 @@ namespace AlbumCoverFinder
             return;
         }
 
+        /// shuffles an array
+        private string[] RandomizeWithFisherYates(string[] array)
+        {
+            int count = array.Length;
 
+            while (count > 1)
+            {
+                int i = m_iRand .Next(count--);
+                (array[i], array[count]) = (array[count], array[i]);
+            }
+            return array;
+        }
 
         /// <summary>
         /// Loads a previously saved database of album covers as a serialized hashtable
@@ -252,6 +262,9 @@ namespace AlbumCoverFinder
                 string[] sPngExtension = { ".png" };
                 string[] sPngFiles = GetFilesWithSuffix(m_sConfigFolder, sPngExtension);
 
+                // shuffle the list to vary the covers.
+                sPngFiles = RandomizeWithFisherYates(sPngFiles);
+
                 foreach (string sCurrentFile in sPngFiles)
                 {
                     // files should be Artist - Album.png. We'll use that as a key and load them into the dict.
@@ -260,7 +273,7 @@ namespace AlbumCoverFinder
                         m_dPictures.Add(sFilenameAsArtistAlbum, new Bitmap(sCurrentFile));
 
                     // Check if we've reached the album count softcap. If we do, we send a last event and break the foreach.
-                    //// todo why launch a last event?
+                    // The event is used to update the UI of the Album Cover Finder configuration tool (we're done loading covers, here's one of them)
                     if (m_dPictures.Count > m_iMaxPicCount)
                     {
                         if (oAlbumFoundEvent != null)
