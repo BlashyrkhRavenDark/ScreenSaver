@@ -64,7 +64,7 @@ namespace ScreenSaver
             m_iCoverWidth = this.Width / m_iXCovers;
             m_iCoverHeight = this.Height / m_iYCovers;
             m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
-            
+
         }
 
         /// <summary>
@@ -77,8 +77,8 @@ namespace ScreenSaver
         {
             InitializeComponent();
             m_oCoverMgr = pCoverMgr;
-            m_iXCovers = 2;
-            m_iYCovers = 2;
+            m_iXCovers = 3;
+            m_iYCovers = 3;
             m_iCoverWidth = 50;
             m_iCoverHeight = 50;
             m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
@@ -102,9 +102,9 @@ namespace ScreenSaver
         /// <param name="sender"></param>
         /// <param name="e"></param>
         private void ScreenSaverForm_Load(object sender, EventArgs e)
-        {            
+        {
             LoadSettings();
-            Cursor.Hide();            
+            Cursor.Hide();
             TopMost = true;
             InitiatePictureBoxes();
             moveTimer.Interval = 1000;
@@ -115,7 +115,7 @@ namespace ScreenSaver
         private void moveTimer_Tick(object sender, System.EventArgs e)
         {
             ChangePicture();
-        } 
+        }
 
         private void InitiatePictureBoxes()
         {
@@ -131,7 +131,7 @@ namespace ScreenSaver
                     m_aPictureBoxes[iCptX, iCptY].Left = iCptX * m_iCoverWidth;
                     m_aPictureBoxes[iCptX, iCptY].Top = iCptY * m_iCoverHeight;
                     this.Controls.Add(m_aPictureBoxes[iCptX, iCptY]);
-                } 
+                }
         }
 
         private void ChangePicture()

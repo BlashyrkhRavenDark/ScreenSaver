@@ -43,7 +43,7 @@ namespace AlbumCoverFinder
                     pictureBox1.Image = p_oPicture;
             }
         }
-        
+
         /// <summary>
         /// On load : Create a new AlbumCoverMgr, register the callback, update Forms with info from past parsed albums (if any)
         /// </summary>

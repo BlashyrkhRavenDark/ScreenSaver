@@ -3,7 +3,7 @@ This is a C# Screensaver that displays album covers from your computer as a moza
 
 Ever wanted to have a cool screensaver like the default iTunes screensaver on Mac, except on Windows? Well, there you go.
 
-It looks like this: https://www.youtube.com/watch?v=LaKKhIipRJ8
+It looks like this: https://www.youtube.com/watch?v=YUvwzdiCS0g
 
 It needs ID3Lib and MP3Lib libraries.
 
@@ -11,11 +11,4 @@ How does it work?
 A companion application (AlbumCoverFinder) parses a folder for MP3s and extracts album covers into a local database.
 This database is then used by the Screensaver to display covers.
 
-Installation instructions: 
-
-1) Download and unzip release.zip somewhere on your computer.
-2) This could set your computer ablaze, don't download executables from the internet, I'm not responsible for your recklessness.
-3) Right click ScreenSaver.scr and select "Install". 
-4) In the Windows Screensaver menu, click Settings to launch the parser that will scan your drives for MP3s. Alternatively, you can run AlbumCoverFinder to the same effect.
-5) That's it. It's a screensaver. Keep your fingers off the keyboard.
-
+Installation instructions to follow.

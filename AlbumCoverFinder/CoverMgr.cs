@@ -133,7 +133,7 @@ namespace AlbumCoverFinder
         /// </summary>
         public void DeleteAlbumBackup()
         {
-           
+
         }
 
         #endregion
@@ -179,7 +179,7 @@ namespace AlbumCoverFinder
         /// p_sExtensionFilter must be an array of strings that will filter files according to their extention, like:
         /// string[] sAudioExtensions = { ".mp3", ".m4a", ".flac", ".ogg" };
         /// </summary>
-        static string[] GetFilesWithSuffix(string p_sdirectoryPath, string [] p_sExtensionFilter)
+        static string[] GetFilesWithSuffix(string p_sdirectoryPath, string[] p_sExtensionFilter)
         {
             List<string> audioFiles = new List<string>();
 
@@ -242,7 +242,7 @@ namespace AlbumCoverFinder
 
             while (count > 1)
             {
-                int i = m_iRand .Next(count--);
+                int i = m_iRand.Next(count--);
                 (array[i], array[count]) = (array[count], array[i]);
             }
             return array;

@@ -29,7 +29,7 @@ namespace ScreenSaver
                 Application.Run(new AlbumCoverFinderForm());
                 //ShowScreenSaver(oCoverMgr);
                 //Application.Run();
-            } 
+            }
             else if (sFirstArg == "/c")                                     // Configuration mode
                 Application.Run(new AlbumCoverFinderForm());
             else if (sFirstArg == "/p")                                     // Preview mode
