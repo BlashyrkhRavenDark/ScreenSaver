@@ -10,9 +10,35 @@ using TagLib;
 using System.Windows.Forms;
 using System.Text;
 using System.Drawing.Imaging;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Net.Http.Json;
+using System.Net;
+using System.Windows.Input;
+using TagLib.Mpeg;
 
 namespace AlbumCoverFinder
 {
+
+
+
+    #region cloud function classes
+    /// <summary>
+    /// Classes used by the gcp cloud function to serialize into a json file the file names and the corresponding bucket download link
+    /// </summary>
+    public class AlbumAndCover
+    {
+        public string sFileName { get; set; }
+        public string sFileUrl { get; set; }
+    }
+
+    public class AlbumCovers
+    {
+        public List<AlbumAndCover> oAlbumAndCovers { get; set; }
+    }
+
+    #endregion
+
     /// <summary>
     /// Cover Manager class. 
     /// 
@@ -31,15 +57,20 @@ namespace AlbumCoverFinder
     {
         #region Class Members
         private string m_sConfigFolder;
-        private string m_sConfigFile;
         private string m_sMusicPath;
         private Dictionary<string, Image> m_dPictures;
-        private ArrayList m_aReadFiles;
-        private static int m_iMaxPicCount = 200; // max number of covers to load in memory. provides enough variety at managed memory cost
+        private static int m_iMaxPicCount = 300; // max number of covers to load in memory. provides enough variety at managed memory cost
         private Random m_iRand = new Random();
         private Thread m_oThread;
-        public delegate void AlbumFound(int p_iAlbumFounds, Image p_oPicture);
-        public event AlbumFound oAlbumFoundEvent;
+        public delegate void NewCoverFound(Image p_oPicture); // Hey, I found this album cover while parsing files!
+        public delegate void CoverMessage(string p_sMessage); // Hey, you should display this in your UI!
+        public delegate void ProgressUpdate(int p_iCurrent, int p_iMax); // Hey, update your progress bar!
+        public event NewCoverFound oNewCoverFoundEvent;
+        public event CoverMessage oCoverMessageEvent;
+        public event ProgressUpdate oProgressUpdateEvent;
+
+        private static HttpClient oHttpClient;
+
         #endregion
 
         #region Constructors
@@ -68,11 +99,9 @@ namespace AlbumCoverFinder
         public void AlbumCoverMgrInit()
         {
             m_sConfigFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\ScreenSaverPictures\\";
-            m_sConfigFile = m_sConfigFolder + "ScreenSaverPictures.bin";
-            m_aReadFiles = new ArrayList();
+            oHttpClient = new HttpClient();
             if (!Directory.Exists(m_sConfigFolder))
                 Directory.CreateDirectory(m_sConfigFolder);
-            LoadBackupData();
         }
         #endregion
 
@@ -177,10 +206,10 @@ namespace AlbumCoverFinder
         /// <summary>
         /// Returns an array of string containing audio files from a directory
         /// p_sExtensionFilter must be an array of strings that will filter files according to their extention, like:
-        /// string[] sAudioExtensions = { ".mp3", ".m4a", ".flac", ".ogg" };
+        /// string[] p_sExtensionFilter = { ".mp3", ".m4a", ".flac", ".ogg" }; (for example)
         /// </summary>
         static string[] GetFilesWithSuffix(string p_sdirectoryPath, string[] p_sExtensionFilter)
-        {
+         {
             List<string> audioFiles = new List<string>();
 
             try
@@ -206,21 +235,13 @@ namespace AlbumCoverFinder
             {
                 string[] sAudioExtensions = { ".mp3", ".m4a", ".flac", ".ogg" };
                 string[] sAudioFiles = GetFilesWithSuffix(m_sMusicPath, sAudioExtensions);
+                int iCpt = 0;
+                oCoverMessageEvent?.Invoke("Processing " + sAudioFiles.Length + " files, please wait");
 
                 foreach (string sCurrentFile in sAudioFiles)
                 {
-                    if (!m_aReadFiles.Contains(sCurrentFile))
-                        AddInfoAndPictureFromFile(sCurrentFile);
-                    m_aReadFiles.Add(sCurrentFile);
-
-                    // Check if we've reached the album count softcap. If we do, we send a last event and break the foreach.
-                    //// todo why launch a last event?
-                    if (m_dPictures.Count > m_iMaxPicCount)
-                    {
-                        if (oAlbumFoundEvent != null)
-                            oAlbumFoundEvent(m_dPictures.Count, GetRandomPicture());
-                        break;
-                    }
+                    AddInfoAndPictureFromFile(sCurrentFile);
+                    oProgressUpdateEvent?.Invoke(++iCpt, sAudioFiles.Length);
                 }
             }
             catch (UnauthorizedAccessException uAEx)
@@ -231,7 +252,7 @@ namespace AlbumCoverFinder
             {
                 Console.WriteLine(pathEx.Message);
             }
-
+            oCoverMessageEvent?.Invoke("Processing done.");
             return;
         }
 
@@ -253,7 +274,7 @@ namespace AlbumCoverFinder
         /// By default : 
         /// user folder \ScreenSaverPictures.bin
         /// </summary>
-        private void LoadBackupData()
+        public void LoadBackupData()
         {
             try
             {
@@ -261,6 +282,8 @@ namespace AlbumCoverFinder
                 m_dPictures = new Dictionary<string, Image>();
                 string[] sPngExtension = { ".png" };
                 string[] sPngFiles = GetFilesWithSuffix(m_sConfigFolder, sPngExtension);
+                int iCpt = 0;
+                oCoverMessageEvent?.Invoke("Found " + sPngFiles.Length + " local png files.");
 
                 // shuffle the list to vary the covers.
                 sPngFiles = RandomizeWithFisherYates(sPngFiles);
@@ -268,17 +291,25 @@ namespace AlbumCoverFinder
                 foreach (string sCurrentFile in sPngFiles)
                 {
                     // files should be Artist - Album.png. We'll use that as a key and load them into the dict.
-                    string sFilenameAsArtistAlbum = Path.GetFileNameWithoutExtension(sCurrentFile);
-                    if (!m_dPictures.ContainsKey(sFilenameAsArtistAlbum))
-                        m_dPictures.Add(sFilenameAsArtistAlbum, new Bitmap(sCurrentFile));
-
-                    // Check if we've reached the album count softcap. If we do, we send a last event and break the foreach.
-                    // The event is used to update the UI of the Album Cover Finder configuration tool (we're done loading covers, here's one of them)
-                    if (m_dPictures.Count > m_iMaxPicCount)
+                    try
                     {
-                        if (oAlbumFoundEvent != null)
-                            oAlbumFoundEvent(m_dPictures.Count, GetRandomPicture());
-                        break;
+                        string sFilenameAsArtistAlbum = Path.GetFileNameWithoutExtension(sCurrentFile);
+                        if (!m_dPictures.ContainsKey(sFilenameAsArtistAlbum))
+                            m_dPictures.Add(sFilenameAsArtistAlbum, new Bitmap(sCurrentFile));
+                        // Update the progress bar. If we found less local .PNGs than the max we want to load, we set it as the progress bar maximum.
+                        oProgressUpdateEvent?.Invoke(++iCpt, sPngFiles.Length < m_iMaxPicCount ? sPngFiles.Length : m_iMaxPicCount);
+                        // Check if we've reached the album count softcap. If we do, we send a last event and break the foreach.
+                        // The event is used to update the UI of the Album Cover Finder configuration tool (we're done loading covers, here's one of them)
+                        if (m_dPictures.Count >= m_iMaxPicCount)
+                        {
+                            oNewCoverFoundEvent?.Invoke(GetRandomPicture());
+                            oCoverMessageEvent?.Invoke("Loaded " + m_dPictures.Count + " local png files.");
+                            break;
+                        }
+                    }
+                    catch (Exception ex) 
+                    {
+                        oCoverMessageEvent?.Invoke("Error parsing file [" + sCurrentFile + "] with error :" + ex.Message);
                     }
                 }
 
@@ -302,29 +333,75 @@ namespace AlbumCoverFinder
             Bitmap oImage;
             try
             {
-
-
                 TagLib.File oFile = TagLib.File.Create(p_sFile);
                 sKey = oFile.Tag.Performers[0] + " - " + oFile.Tag.Album;
-
+                
                 if (!m_dPictures.ContainsKey(sKey) && oFile.Tag.Pictures.Length > 0 && oFile.Tag.Pictures[0].Type != PictureType.NotAPicture)
                 {
                     MemoryStream ms = new MemoryStream(oFile.Tag.Pictures[0].Data.Data);
                     oImage = ResizeImage(Image.FromStream(ms), 384, 360);
                     oImage.Save(m_sConfigFolder + sKey + ".png");
                     m_dPictures.Add(sKey, oImage);
-                    /// todo what are we doing with this event?
-                    if (oAlbumFoundEvent != null)
-                        oAlbumFoundEvent(m_dPictures.Count, oImage);
+                    /// Send a message to the windoes form that we found local albums
+                    oCoverMessageEvent?.Invoke("Saving file : " + sKey + ".png");
+                    oNewCoverFoundEvent?.Invoke(oImage);
                 }
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine("An error occurred: " + ex.Message);
+                oCoverMessageEvent?.Invoke("\r\nError while trying get album cover from file : " + p_sFile + " " + ex.Message);
                 return false;
             }
         }
+
+
+         async Task<AlbumCovers> GetAsync(HttpClient p_httpClient, string p_sFunctionUrl, string sAuthTokenFile, string p_sCoverDirectory)
+        {
+            AlbumCovers oAlbumCoversFromJson;
+            string sLocalFilename;
+            WebClient oWebClient = new WebClient();
+            int iCpt = 0;
+
+            try
+            {
+                oCoverMessageEvent?.Invoke("Connecting to the cloud to get album covers.");
+                // Getting the Json file from the cloud function
+                oAlbumCoversFromJson = await p_httpClient.GetFromJsonAsync<AlbumCovers>(p_sFunctionUrl);
+
+                // Looping on the JSON file downloaded from the cloud to see what we got
+                if (oAlbumCoversFromJson != null)
+                {
+                    if (oCoverMessageEvent != null && oAlbumCoversFromJson.oAlbumAndCovers != null)
+                        oCoverMessageEvent("Albums found in the cloud: " + oAlbumCoversFromJson.oAlbumAndCovers.Count());
+                    foreach (AlbumAndCover oAAC in oAlbumCoversFromJson.oAlbumAndCovers)
+                    {
+                        sLocalFilename = p_sCoverDirectory + "\\" + oAAC.sFileName;
+                        if (!System.IO.File.Exists(sLocalFilename))
+                        {
+                            if (oCoverMessageEvent != null && oAlbumCoversFromJson.oAlbumAndCovers != null)
+                                oCoverMessageEvent("Downloading file: " + oAAC.sFileName);
+                            oWebClient.DownloadFile(oAAC.sFileUrl, sLocalFilename);
+                        }
+                        oProgressUpdateEvent?.Invoke(++iCpt, oAlbumCoversFromJson.oAlbumAndCovers.Count());
+                    }
+                    oCoverMessageEvent?.Invoke("Done processing Cloud Albums.");
+                }
+            }
+            catch (Exception ex)
+            {
+                oCoverMessageEvent?.Invoke("Error while trying to get cloud albums: " + ex.Message);
+                return null;
+            }
+            return null;
+
+        }
+        public string GetCloudCovers(string sFunctionUrl, string sAuthTokenFile)
+        {
+            GetAsync(oHttpClient, sFunctionUrl, sAuthTokenFile, m_sConfigFolder);
+            return "";
+        }
+
         #endregion
     }
 }

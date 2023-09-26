@@ -22,6 +22,7 @@ namespace ScreenSaver
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             oCoverMgr = new AlbumCoverFinder.AlbumCoverMgr();               // 1 instance of cover manager is enough for multiple screens
+            oCoverMgr.LoadBackupData();
             ParseCommandLineArgs(ref sFirstArg, ref sSecondArg, p_aArgs);   // Let's sort the arguments
 
             if (sFirstArg == "")                                            // No arguments - treat like /c
