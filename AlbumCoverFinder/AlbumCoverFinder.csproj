@@ -114,11 +114,20 @@
     <Compile Include="AlbumCoverFinderForm.Designer.cs">
       <DependentUpon>AlbumCoverFinderForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="CloudDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CloudDialog.Designer.cs">
+      <DependentUpon>CloudDialog.cs</DependentUpon>
+    </Compile>
     <Compile Include="CoverMgr.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="AlbumCoverFinderForm.resx">
       <DependentUpon>AlbumCoverFinderForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="CloudDialog.resx">
+      <DependentUpon>CloudDialog.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

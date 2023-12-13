@@ -365,7 +365,7 @@ namespace AlbumCoverFinder
 
             try
             {
-                oCoverMessageEvent?.Invoke("Connecting to the cloud to get album covers.");
+                oCoverMessageEvent?.Invoke("\r\nConnecting to the cloud to get album covers.");
                 // Getting the Json file from the cloud function
                 oAlbumCoversFromJson = await p_httpClient.GetFromJsonAsync<AlbumCovers>(p_sFunctionUrl);
 

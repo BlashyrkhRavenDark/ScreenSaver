@@ -34,8 +34,6 @@ namespace AlbumCoverFinder
             this.tDisplayUpdate = new System.Windows.Forms.TextBox();
             this.bDeleteBackupFIle = new System.Windows.Forms.Button();
             this.folderBrowserDialog1 = new System.Windows.Forms.FolderBrowserDialog();
-            this.tCloudFunctionUrl = new System.Windows.Forms.TextBox();
-            this.tAuthTokenFile = new System.Windows.Forms.TextBox();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
             this.pbProgressBar = new System.Windows.Forms.ProgressBar();
@@ -79,10 +77,10 @@ namespace AlbumCoverFinder
             // 
             // bDeleteBackupFIle
             // 
-            this.bDeleteBackupFIle.Location = new System.Drawing.Point(533, 19);
+            this.bDeleteBackupFIle.Location = new System.Drawing.Point(10, 27);
             this.bDeleteBackupFIle.Margin = new System.Windows.Forms.Padding(4);
             this.bDeleteBackupFIle.Name = "bDeleteBackupFIle";
-            this.bDeleteBackupFIle.Size = new System.Drawing.Size(100, 54);
+            this.bDeleteBackupFIle.Size = new System.Drawing.Size(303, 34);
             this.bDeleteBackupFIle.TabIndex = 6;
             this.bDeleteBackupFIle.Text = "Get Cloud Backups";
             this.bDeleteBackupFIle.UseVisualStyleBackColor = true;
@@ -91,22 +89,6 @@ namespace AlbumCoverFinder
             // folderBrowserDialog1
             // 
             this.folderBrowserDialog1.RootFolder = System.Environment.SpecialFolder.MyMusic;
-            // 
-            // tCloudFunctionUrl
-            // 
-            this.tCloudFunctionUrl.Location = new System.Drawing.Point(14, 22);
-            this.tCloudFunctionUrl.Margin = new System.Windows.Forms.Padding(4);
-            this.tCloudFunctionUrl.Name = "tCloudFunctionUrl";
-            this.tCloudFunctionUrl.Size = new System.Drawing.Size(509, 22);
-            this.tCloudFunctionUrl.TabIndex = 7;
-            // 
-            // tAuthTokenFile
-            // 
-            this.tAuthTokenFile.Location = new System.Drawing.Point(14, 51);
-            this.tAuthTokenFile.Margin = new System.Windows.Forms.Padding(4);
-            this.tAuthTokenFile.Name = "tAuthTokenFile";
-            this.tAuthTokenFile.Size = new System.Drawing.Size(447, 22);
-            this.tAuthTokenFile.TabIndex = 8;
             // 
             // groupBox1
             // 
@@ -120,29 +102,27 @@ namespace AlbumCoverFinder
             // 
             // groupBox2
             // 
-            this.groupBox2.Controls.Add(this.tAuthTokenFile);
-            this.groupBox2.Controls.Add(this.tCloudFunctionUrl);
             this.groupBox2.Controls.Add(this.bDeleteBackupFIle);
-            this.groupBox2.Location = new System.Drawing.Point(12, 411);
+            this.groupBox2.Location = new System.Drawing.Point(675, 420);
             this.groupBox2.Name = "groupBox2";
-            this.groupBox2.Size = new System.Drawing.Size(646, 88);
+            this.groupBox2.Size = new System.Drawing.Size(320, 73);
             this.groupBox2.TabIndex = 11;
             this.groupBox2.TabStop = false;
-            this.groupBox2.Text = "Download album covers from the cloud through a GCP Cloud Function";
+            this.groupBox2.Text = "Download album covers from the cloud";
             // 
             // pbProgressBar
             // 
             this.pbProgressBar.Location = new System.Drawing.Point(13, 31);
             this.pbProgressBar.Name = "pbProgressBar";
-            this.pbProgressBar.Size = new System.Drawing.Size(302, 27);
+            this.pbProgressBar.Size = new System.Drawing.Size(623, 27);
             this.pbProgressBar.TabIndex = 12;
             // 
             // groupBox3
             // 
             this.groupBox3.Controls.Add(this.pbProgressBar);
-            this.groupBox3.Location = new System.Drawing.Point(673, 426);
+            this.groupBox3.Location = new System.Drawing.Point(16, 420);
             this.groupBox3.Name = "groupBox3";
-            this.groupBox3.Size = new System.Drawing.Size(322, 73);
+            this.groupBox3.Size = new System.Drawing.Size(642, 73);
             this.groupBox3.TabIndex = 13;
             this.groupBox3.TabStop = false;
             this.groupBox3.Text = "Progress";
@@ -152,7 +132,7 @@ namespace AlbumCoverFinder
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.AutoScroll = true;
-            this.ClientSize = new System.Drawing.Size(1004, 509);
+            this.ClientSize = new System.Drawing.Size(1002, 501);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.groupBox1);
@@ -160,7 +140,8 @@ namespace AlbumCoverFinder
             this.Controls.Add(this.pictureBox1);
             this.Margin = new System.Windows.Forms.Padding(4);
             this.MaximizeBox = false;
-            this.MinimumSize = new System.Drawing.Size(557, 328);
+            this.MaximumSize = new System.Drawing.Size(1020, 548);
+            this.MinimumSize = new System.Drawing.Size(1020, 548);
             this.Name = "AlbumCoverFinderForm";
             this.ShowIcon = false;
             this.Text = "Album Cover Finder";
@@ -168,7 +149,6 @@ namespace AlbumCoverFinder
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.groupBox1.ResumeLayout(false);
             this.groupBox2.ResumeLayout(false);
-            this.groupBox2.PerformLayout();
             this.groupBox3.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -181,8 +161,6 @@ namespace AlbumCoverFinder
         private System.Windows.Forms.TextBox tDisplayUpdate;
         private System.Windows.Forms.Button bDeleteBackupFIle;
         private System.Windows.Forms.FolderBrowserDialog folderBrowserDialog1;
-        private System.Windows.Forms.TextBox tCloudFunctionUrl;
-        private System.Windows.Forms.TextBox tAuthTokenFile;
         private System.Windows.Forms.GroupBox groupBox1;
         private System.Windows.Forms.GroupBox groupBox2;
         private System.Windows.Forms.ProgressBar pbProgressBar;

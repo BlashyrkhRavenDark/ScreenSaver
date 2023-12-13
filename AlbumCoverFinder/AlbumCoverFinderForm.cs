@@ -5,7 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading.Tasks; 
 using System.Windows.Forms;
 using System.IO;
 using System.Threading;
@@ -42,7 +42,7 @@ namespace AlbumCoverFinder
             else
             {
                 if (p_oPicture != null)
-                    pictureBox1.Image = p_oPicture;
+                    pictureBox1.Image = oCoverMgr.GetRandomPicture(320,320);
             }
         }
 
@@ -104,8 +104,10 @@ namespace AlbumCoverFinder
 
         private void bDeleteBackupFIle_Click(object sender, EventArgs e)
         {
-
-            oCoverMgr.GetCloudCovers(tCloudFunctionUrl.Text, tAuthTokenFile.Text);
+            CloudDialog oCD = new CloudDialog();
+            oCD.ShowDialog();
+            if (oCD.bOK == true)
+                oCoverMgr.GetCloudCovers(oCD.sUrl, oCD.sToken);
         }
 
     }
