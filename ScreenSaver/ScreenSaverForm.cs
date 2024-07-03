@@ -1,7 +1,3 @@
-﻿/*
-
- */
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -17,16 +13,9 @@ using AlbumCoverFinder;
 namespace ScreenSaver
 {
     /// <summary>
-    /// This class is straightforward: it is derived from a windows form, and contains a grid of PictureBox to display the covers
-    /// Two constructors depending on if it is launched in screensaver mode, or in settings mode within the configuration window used for all Windows screensavers
-    /// Once we have created our grid of pictureboxes with a random picture in each picturebox, we have an event that changes a random picturebox with a random cover.
-    /// Potential things to do in the future: 
-    /// - change the number of pictures (currently 5x3, but could be more)
-    /// - change the pictures with a pattern (snake or something) instead of random
-    /// - change the way each picture is changed (flip it like the original MacOS screensaver? fade it?)
-    /// - read the currently played song in chrome / itunes and display the corresponding album
-    /// - change the pattern with bigger or smaller pictures present on screen at the same time.
-    /// - save those parameters in the registry
+    /// This class is straightforward: it derives from a Windows form, and contains a grid of PictureBox to display the covers.
+    /// Two constructors depending on whether it is launched in screensaver mode, or in settings mode within the configuration window used for all Windows screensavers.
+    /// Once we have created our grid of PictureBoxes with a random picture in each PictureBox, we trigger an event that replaces a random PictureBox by a random cover.
     /// </summary>
     public partial class ScreenSaverForm : Form
     {
@@ -61,8 +50,8 @@ namespace ScreenSaver
         #region Constructors
 
         /// <summary>
-        /// We are creating the screensaver form within a parent form, fitting 5x3 covers
-        /// We compute the size of the covers to fit 5x3 in the screen 
+        /// We are creating the screensaver form within a parent form, fitting 5x3 covers.
+        /// We compute the size of the covers to fit 5x3 in the screen.
         /// </summary>
         /// <param name="Bounds">The bounds of the parent form</param>
         /// <param name="pCoverMgr">A reference to the Cover Manager which manages the picture files</param>
@@ -80,8 +69,8 @@ namespace ScreenSaver
         }
 
         /// <summary>
-        /// This is the small window inside the screensaver parameter window
-        /// A 3*3 picture table will be enough
+        /// This is the small window inside the screensaver parameter window.
+        /// A 3*3 picture table will be enough.
         /// </summary>
         /// <param name="PreviewWndHandle"></param>
         /// <param name="pCoverMgr"></param>
@@ -97,11 +86,14 @@ namespace ScreenSaver
 
             // Set the preview window as the parent of this window
             SetParent(this.Handle, PreviewWndHandle);
+
             // Make this a child window so it will close when the parent dialog closes
             SetWindowLong(this.Handle, -16, new IntPtr(GetWindowLong(this.Handle, -16) | 0x40000000));
+
             // Place our window inside the parent
             Rectangle ParentRect;
             GetClientRect(PreviewWndHandle, out ParentRect);
+
             Size = ParentRect.Size;
             Location = new Point(0, 0);
             previewMode = true;
