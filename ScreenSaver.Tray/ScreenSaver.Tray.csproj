@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- windows10.0.19041.0 unlocks both SMTC and Windows.System.UserProfile.LockScreen -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>ScreenSaver.Tray</RootNamespace>
+    <AssemblyName>ScreenSaver.Tray</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- See AlbumCoverFinder.csproj for why bin/obj are redirected. -->
+    <BaseOutputPath>..\out\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>..\out\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+    <AssemblyTitle>ScreenSaver Tray</AssemblyTitle>
+    <ApplicationIcon>..\icons\app.ico</ApplicationIcon>
+    <Product>ScreenSaver</Product>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AlbumCoverFinder\AlbumCoverFinder.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reuse the screensaver's SMTC monitor source so SMTC code stays single-source. -->
+    <Compile Include="..\ScreenSaver\NowPlayingMonitor.cs" Link="NowPlayingMonitor.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DiscordRichPresence" Version="1.3.0.28" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="www\index.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

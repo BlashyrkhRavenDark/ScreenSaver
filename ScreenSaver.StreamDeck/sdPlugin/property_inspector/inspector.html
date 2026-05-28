@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>ScreenSaver Cover Tile</title>
+  <style>
+    /*
+      Stream Deck property inspector styling - the SD app injects its own dark
+      theme but a couple of base styles keep the form readable when the SDPI
+      stylesheet isn't loaded yet.
+    */
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 9pt;
+      color: #d8d8d8;
+      background: #2d2d30;
+    }
+    .sdpi-wrapper { padding: 8px 12px; }
+    .sdpi-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .sdpi-item-label {
+      width: 90px;
+      flex-shrink: 0;
+      text-align: right;
+      padding-right: 8px;
+      color: #9a9a9a;
+    }
+    .sdpi-item-value {
+      flex: 1;
+    }
+    select {
+      width: 100%;
+      padding: 4px;
+      background: #3d3d3f;
+      border: 1px solid #1e1e1e;
+      color: #f3f3f3;
+      border-radius: 3px;
+    }
+    .preview {
+      display: grid;
+      gap: 2px;
+      margin: 8px auto 12px;
+      background: #1e1e1e;
+      padding: 4px;
+      border-radius: 4px;
+      width: 96px;
+    }
+    .preview .cell {
+      background: #444;
+      aspect-ratio: 1;
+      border-radius: 2px;
+    }
+    .preview .cell.active {
+      background: linear-gradient(135deg, #4a9eff 0%, #2563eb 100%);
+    }
+    .hint {
+      color: #707070;
+      font-size: 8pt;
+      margin: 8px 12px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="sdpi-wrapper">
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Grid size</div>
+      <div class="sdpi-item-value">
+        <select id="gridSize">
+          <option value="1">1 x 1 (single key)</option>
+          <option value="2">2 x 2 (4 keys)</option>
+          <option value="3">3 x 3 (9 keys)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Row</div>
+      <div class="sdpi-item-value">
+        <select id="row"></select>
+      </div>
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Column</div>
+      <div class="sdpi-item-value">
+        <select id="column"></select>
+      </div>
+    </div>
+
+    <div class="preview" id="preview"></div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">On press</div>
+      <div class="sdpi-item-value">
+        <select id="action">
+          <option value="None">No action</option>
+          <option value="PlayPause">Play / Pause</option>
+          <option value="Next">Next track</option>
+          <option value="Previous">Previous track</option>
+          <option value="Stop">Stop</option>
+          <option value="VolumeUp">Volume up</option>
+          <option value="VolumeDown">Volume down</option>
+          <option value="Mute">Mute toggle</option>
+        </select>
+      </div>
+    </div>
+
+    <p class="hint">
+      Drop the same action on multiple keys to spread one album cover across them.
+      For a 3 x 3 cover wall, use 9 keys with grid size 3 and pick row 0&ndash;2 / column 0&ndash;2 for each.
+      Each key can do its own thing on press &ndash; mix and match next, previous, volume, mute.
+    </p>
+
+  </div>
+
+  <script>
+    let websocket = null;
+    let pluginUUID = null;
+    let settings = { gridSize: 1, row: 0, column: 0, action: 'PlayPause' };
+
+    function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+      pluginUUID = inUUID;
+      const actionInfo = JSON.parse(inActionInfo);
+      if (actionInfo && actionInfo.payload && actionInfo.payload.settings) {
+        const s = actionInfo.payload.settings;
+        settings = {
+          gridSize: parseInt(s.gridSize) || 1,
+          row: parseInt(s.row) || 0,
+          column: parseInt(s.column) || 0,
+          action: s.action || 'PlayPause'
+        };
+      }
+
+      websocket = new WebSocket('ws://127.0.0.1:' + inPort);
+      websocket.onopen = () => {
+        websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
+      };
+
+      hydrateUI();
+    }
+
+    function persist() {
+      if (!websocket || websocket.readyState !== WebSocket.OPEN) return;
+      websocket.send(JSON.stringify({
+        event: 'setSettings',
+        context: pluginUUID,
+        payload: settings
+      }));
+    }
+
+    function populateOptions(select, n, selectedValue) {
+      select.innerHTML = '';
+      for (let i = 0; i < n; i++) {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = String(i);
+        if (i === selectedValue) opt.selected = true;
+        select.appendChild(opt);
+      }
+    }
+
+    function renderPreview() {
+      const n = settings.gridSize;
+      const preview = document.getElementById('preview');
+      preview.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+      preview.innerHTML = '';
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell' + (r === settings.row && c === settings.column ? ' active' : '');
+          preview.appendChild(cell);
+        }
+      }
+    }
+
+    function hydrateUI() {
+      const gridSel = document.getElementById('gridSize');
+      const rowSel = document.getElementById('row');
+      const colSel = document.getElementById('column');
+      const actSel = document.getElementById('action');
+
+      gridSel.value = String(settings.gridSize);
+      populateOptions(rowSel, settings.gridSize, settings.row);
+      populateOptions(colSel, settings.gridSize, settings.column);
+      actSel.value = settings.action;
+      renderPreview();
+
+      gridSel.addEventListener('change', () => {
+        settings.gridSize = parseInt(gridSel.value);
+        // Clamp row/col into the new grid range.
+        if (settings.row >= settings.gridSize) settings.row = settings.gridSize - 1;
+        if (settings.column >= settings.gridSize) settings.column = settings.gridSize - 1;
+        populateOptions(rowSel, settings.gridSize, settings.row);
+        populateOptions(colSel, settings.gridSize, settings.column);
+        renderPreview();
+        persist();
+      });
+
+      rowSel.addEventListener('change', () => {
+        settings.row = parseInt(rowSel.value);
+        renderPreview();
+        persist();
+      });
+
+      colSel.addEventListener('change', () => {
+        settings.column = parseInt(colSel.value);
+        renderPreview();
+        persist();
+      });
+
+      actSel.addEventListener('change', () => {
+        settings.action = actSel.value;
+        persist();
+      });
+    }
+  </script>
+</body>
+</html>

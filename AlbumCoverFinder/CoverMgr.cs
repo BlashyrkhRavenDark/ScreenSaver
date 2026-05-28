@@ -1,85 +1,119 @@
-﻿using System;
+using System;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
-using System.Collections;
 using System.Threading;
 using System.Collections.Generic;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Linq;
-using Mp3Lib;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace AlbumCoverFinder
 {
     /// <summary>
-    /// Cover Manager class. 
-    /// 
+    /// Cover Manager class.
+    ///
     /// Initialisation:
-    /// Recursively parses a directory to fetch cover pictures from mp3s.
-    /// Saves a cover database of previously indexed dirtectories.
-    /// Loads a previously saved cover database 
-    /// 
-    /// Once initialized: 
-    /// Offers covers in sequence or at random. 
-    /// Sends a placeholder when empty
+    /// Recursively parses a directory to fetch cover pictures from any audio file format
+    /// supported by TagLib# (MP3, FLAC, M4A/AAC, OGG, WMA, OPUS, WAV with tags).
+    /// Loads a previously saved cover database.
+    ///
+    /// Once initialized:
+    /// Offers covers in sequence or at random.
+    /// Sends a placeholder when empty.
+    ///
+    /// Storage layout:
+    ///   %USERPROFILE%\ScreenSaverCovers\
+    ///     index.txt        - one artist+album key per line; line N maps to N.png
+    ///     0.png, 1.png ... - resized 384x384 cover thumbnails
     /// </summary>
-    /// 
-    [Serializable()]
     public class AlbumCoverMgr
     {
         #region Class Members
-        private string m_sConfigFile;
+        private static readonly HashSet<string> s_audioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".mp3", ".flac", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".wma", ".wav", ".aiff", ".aif", ".ape"
+        };
+
+        private string m_sCacheDir;
+        private string m_sIndexFile;
         private int m_iLastBackupCount = 0;
         private string m_sMusicPath;
         private Dictionary<string, Image> m_dPictures;
-        private ArrayList m_aReadFiles;
-        private static int m_iMaxPicCount = 5000;
-        private Random m_iRand = new Random();
+        private Dictionary<string, AlbumMetadata> m_dMetadata = new Dictionary<string, AlbumMetadata>();
+        private List<string> m_aOrderedKeys = new List<string>();
+        // Default cap is 0 = unlimited. Now that each cover is its own PNG file,
+        // the old "memory hog at 700" reason for capping is much weaker.
+        // Configurable via HKCU\SOFTWARE\Demo_ScreenSaver\AlbumCap.
+        private int m_iMaxPicCount = 0;
+        private static readonly Random s_oRand = new Random();
         private Thread m_oThread;
+        private bool m_bCapReached = false;
+        private CoverFilter m_oFilter;
+        private CoverBlocklist m_oBlocklist;
+        // Byte-length -> set of SHA256 hex hashes already in the cache. Used by
+        // the scanner to skip covers whose original embedded artwork is byte-
+        // identical to one we've already added under a different artist+album
+        // (compilations, re-releases). Hash is only computed when a length
+        // collision is found, per the user's "trigger only if same byte count"
+        // requirement.
+        private Dictionary<int, HashSet<string>> m_dHashesByLength = new Dictionary<int, HashSet<string>>();
+        private static readonly JsonSerializerOptions s_jsonOpts = new JsonSerializerOptions { WriteIndented = false };
+
         public delegate void AlbumFound(int p_iAlbumFounds, Image p_oPicture);
         public event AlbumFound oAlbumFoundEvent;
+
+        public bool CapReached { get { return m_bCapReached; } }
+        public int MaxPicCount { get { return m_iMaxPicCount; } }
+        public CoverBlocklist Blocklist { get { return m_oBlocklist; } }
+
+        /// <summary>
+        /// Override the album cap. 0 disables the cap entirely. Affects in-flight scans.
+        /// </summary>
+        public void SetAlbumCap(int cap)
+        {
+            m_iMaxPicCount = Math.Max(0, cap);
+        }
         #endregion
 
         #region Constructors
-        /// <summary>
-        /// Constructor with custom folder to parse for albums
-        /// </summary>
-        /// <param name="p_sCustomMusicPath"></param>
         public AlbumCoverMgr(string p_sCustomMusicPath)
         {
             m_sMusicPath = p_sCustomMusicPath;
-            m_sConfigFile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\ScreenSaverPictures.bin";
+            InitializePaths();
             LoadBackupData();
         }
 
-        /// <summary>
-        /// Constructor with default folder to parse for albums
-        /// </summary>
         public AlbumCoverMgr()
         {
             m_sMusicPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            m_sConfigFile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\ScreenSaverPictures.bin";
+            InitializePaths();
             LoadBackupData();
+        }
+
+        private void InitializePaths()
+        {
+            string sUserProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            m_sCacheDir = Path.Combine(sUserProfile, "ScreenSaverCovers");
+            m_sIndexFile = Path.Combine(m_sCacheDir, "index.txt");
+            m_oBlocklist = new CoverBlocklist(m_sCacheDir);
         }
 
         #endregion
 
         #region Public Functions
-        /// <summary>
-        /// Starts the background process that parses pictures in default directory
-        /// </summary>
+
         public void ParseDirectoryForPictures()
         {
             if (m_oThread == null || m_oThread.IsAlive != true)
             {
+                m_bCapReached = false;
                 m_oThread = new Thread(RunCoverMrg);
                 m_oThread.IsBackground = true;
                 m_oThread.Start();
             }
         }
-        /// <summary>
-        /// Starts the background process that parses pictures
-        /// </summary>
-        /// <param name="p_sDirectoryToParse">Specifies Directory to parse</param>
+
         public void ParseDirectoryForPictures(string p_sDirectoryToParse)
         {
             m_sMusicPath = p_sDirectoryToParse;
@@ -89,14 +123,181 @@ namespace AlbumCoverFinder
 
         public Image GetRandomPicture()
         {
-            if (m_dPictures.Count > 0)
+            var pool = GetFilteredPool();
+            if (pool.Count > 0)
+                return m_dPictures[pool[s_oRand.Next(pool.Count)]];
+            return BuildPlaceholder();
+        }
+
+        /// <summary>
+        /// Set the active cover filter. Null disables filtering (the default).
+        /// Callers downstream of this (the screensaver) will see only matching keys
+        /// from <see cref="GetRandomEntry"/>, <see cref="GetRandomPicture"/>, and
+        /// <see cref="GetKeysSortedByYear"/>.
+        /// </summary>
+        public void SetFilter(CoverFilter filter)
+        {
+            m_oFilter = filter;
+        }
+
+        public CoverFilter GetFilter() { return m_oFilter; }
+
+        /// <summary>
+        /// Returns the list of cover keys currently allowed by the active filter.
+        /// When no filter is set, returns all keys in scan order.
+        /// </summary>
+        public List<string> GetFilteredPool()
+        {
+            if (m_dPictures == null || m_dPictures.Count == 0) return new List<string>();
+
+            List<string> result = new List<string>(m_aOrderedKeys.Count);
+            foreach (string k in m_aOrderedKeys)
             {
-                List<Image> lImages = Enumerable.ToList(m_dPictures.Values);
-                return lImages[m_iRand.Next(m_dPictures.Count - 1)];
+                if (!m_dPictures.ContainsKey(k)) continue;
+                if (m_oBlocklist != null && m_oBlocklist.IsBlocked(k)) continue;
+                if (m_oFilter != null)
+                {
+                    AlbumMetadata meta;
+                    m_dMetadata.TryGetValue(k, out meta);
+                    if (!m_oFilter.Matches(meta)) continue;
+                }
+                result.Add(k);
             }
-            else
-                return new Bitmap(120, 120);
-            //Bitmap(120, 120, System.Drawing.Imaging.PixelFormat.DontCare);
+            return result;
+        }
+
+        /// <summary>
+        /// Returns a random key matching the same artist as <paramref name="p_sKey"/>
+        /// but for a different album. Used by the #8 "more from this artist" thumbnail.
+        /// Returns null if there's no sibling album in the cache.
+        /// </summary>
+        public string GetSiblingKey(string p_sKey)
+        {
+            if (string.IsNullOrEmpty(p_sKey)) return null;
+            AlbumMetadata meta;
+            if (!m_dMetadata.TryGetValue(p_sKey, out meta)) return null;
+            if (string.IsNullOrEmpty(meta.Artist)) return null;
+
+            List<string> siblings = null;
+            foreach (var kv in m_dMetadata)
+            {
+                if (kv.Key == p_sKey) continue;
+                if (m_oBlocklist != null && m_oBlocklist.IsBlocked(kv.Key)) continue;
+                if (string.Equals(kv.Value.Artist, meta.Artist, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (siblings == null) siblings = new List<string>();
+                    siblings.Add(kv.Key);
+                }
+            }
+            if (siblings == null || siblings.Count == 0) return null;
+            return siblings[s_oRand.Next(siblings.Count)];
+        }
+
+        public AlbumMetadata GetMetadata(string p_sKey)
+        {
+            AlbumMetadata meta;
+            return m_dMetadata.TryGetValue(p_sKey ?? string.Empty, out meta) ? meta : new AlbumMetadata();
+        }
+
+        /// <summary>
+        /// Returns all distinct genres seen in the scan, sorted alphabetically.
+        /// Used to populate the filter dropdown in AlbumCoverFinder.
+        /// </summary>
+        public List<string> GetDistinctGenres()
+        {
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var meta in m_dMetadata.Values)
+                if (!string.IsNullOrWhiteSpace(meta.Genre))
+                    seen.Add(meta.Genre);
+            var sorted = new List<string>(seen);
+            sorted.Sort(StringComparer.OrdinalIgnoreCase);
+            return sorted;
+        }
+
+        /// <summary>
+        /// Returns (minYear, maxYear) across the scanned library. (0, 0) when no
+        /// year metadata is available.
+        /// </summary>
+        public (int min, int max) GetYearRange()
+        {
+            int mn = int.MaxValue, mx = int.MinValue;
+            foreach (var meta in m_dMetadata.Values)
+            {
+                if (meta.Year <= 0) continue;
+                if (meta.Year < mn) mn = meta.Year;
+                if (meta.Year > mx) mx = meta.Year;
+            }
+            if (mn == int.MaxValue) return (0, 0);
+            return (mn, mx);
+        }
+
+        /// <summary>
+        /// Returns a random (key, image) pair, avoiding keys already in <paramref name="p_oExcludeKeys"/>
+        /// when possible. Falls back to an unconstrained random pick if every key is excluded
+        /// or no exclusion set is provided.
+        /// </summary>
+        public KeyValuePair<string, Image> GetRandomEntry(HashSet<string> p_oExcludeKeys)
+        {
+            var pool = GetFilteredPool();
+            if (pool.Count == 0)
+                return new KeyValuePair<string, Image>(string.Empty, BuildPlaceholder());
+
+            if (p_oExcludeKeys != null && p_oExcludeKeys.Count > 0)
+            {
+                List<string> available = new List<string>(pool.Count);
+                foreach (string k in pool)
+                    if (!p_oExcludeKeys.Contains(k))
+                        available.Add(k);
+                if (available.Count > 0)
+                {
+                    string pick = available[s_oRand.Next(available.Count)];
+                    return new KeyValuePair<string, Image>(pick, m_dPictures[pick]);
+                }
+            }
+
+            string chosen = pool[s_oRand.Next(pool.Count)];
+            return new KeyValuePair<string, Image>(chosen, m_dPictures[chosen]);
+        }
+
+        /// <summary>
+        /// Returns the cover for a specific artist+album key, or null when not in the cache.
+        /// Used by the Now-Playing focal tile to look up the active track's cover.
+        /// </summary>
+        public Image GetPictureByKey(string p_sKey)
+        {
+            if (string.IsNullOrEmpty(p_sKey) || m_dPictures == null) return null;
+            Image img;
+            return m_dPictures.TryGetValue(p_sKey, out img) ? img : null;
+        }
+
+        public static string BuildKey(string p_sArtist, string p_sAlbum)
+        {
+            return (p_sArtist ?? string.Empty) + (p_sAlbum ?? string.Empty);
+        }
+
+        private void RegisterHash(int byteLen, string hexHash)
+        {
+            if (byteLen <= 0 || string.IsNullOrEmpty(hexHash)) return;
+            if (!m_dHashesByLength.TryGetValue(byteLen, out var set))
+            {
+                set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                m_dHashesByLength[byteLen] = set;
+            }
+            set.Add(hexHash);
+        }
+
+        private static string ComputeSha256Hex(byte[] data)
+        {
+            byte[] hash = SHA256.HashData(data);
+            return Convert.ToHexString(hash);
+        }
+
+        private static Bitmap BuildPlaceholder()
+        {
+            Bitmap oBmp = new Bitmap(384, 384);
+            using (Graphics g = Graphics.FromImage(oBmp))
+                g.Clear(Color.Black);
+            return oBmp;
         }
 
         public int GetAlbumTotal()
@@ -104,38 +305,34 @@ namespace AlbumCoverFinder
             return (m_dPictures != null ? m_dPictures.Count : 0);
         }
 
-        /// <summary>
-        /// Deletes the file containing previously parsed album covers, and fires the AlbumFound event with 0 albums.
-        /// </summary>
         public void DeleteAlbumBackup()
         {
+            m_bCapReached = false;
             if (m_dPictures != null)
                 m_dPictures.Clear();
             else
                 m_dPictures = new Dictionary<string, Image>();
+            m_dMetadata.Clear();
+            m_aOrderedKeys.Clear();
+            m_iLastBackupCount = 0;
+
             try
             {
-                if (File.Exists(m_sConfigFile))
-                    File.Delete(m_sConfigFile);
+                if (Directory.Exists(m_sCacheDir))
+                    Directory.Delete(m_sCacheDir, true);
             }
             catch
             {
-                return;
+                // Best-effort: a locked file shouldn't crash the UI.
             }
-            oAlbumFoundEvent(0, GetRandomPicture());
+            if (oAlbumFoundEvent != null)
+                oAlbumFoundEvent(0, GetRandomPicture());
         }
 
         #endregion
 
         #region Private Functions
 
-        /// <summary>
-        /// Resize the image to the specified width and height.
-        /// </summary>
-        /// <param name="image">The image to resize.</param>
-        /// <param name="width">The width to resize to.</param>
-        /// <param name="height">The height to resize to.</param>
-        /// <returns>The resized image.</returns>
         private static Bitmap ResizeImage(Image image, int width, int height)
         {
             var destRect = new Rectangle(0, 0, width, height);
@@ -161,29 +358,21 @@ namespace AlbumCoverFinder
             return destImage;
         }
 
-
-
-
-        /// <summary>
-        /// Main Cover Manager thread.
-        /// Is launched once initialisation parameters have been given to constructors
-        /// </summary>
         private void RunCoverMrg()
         {
-
-            m_aReadFiles = new ArrayList();
-
             try
             {
-                var files = Directory.EnumerateFiles(m_sMusicPath, "*.mp3", SearchOption.AllDirectories);
+                var files = Directory.EnumerateFiles(m_sMusicPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => s_audioExtensions.Contains(Path.GetExtension(f)));
+
                 foreach (string sCurrentFile in files)
                 {
-                    if (!m_aReadFiles.Contains(sCurrentFile))
-                        AddInfoAndPictureFromFile(sCurrentFile);
+                    AddInfoAndPictureFromFile(sCurrentFile);
 
-                    // Check if we've reached the album count softcap. If we do, we send a last event and break the foreach.
-                    if (m_dPictures.Count > m_iMaxPicCount)
+                    // Cap of 0 disables the limit entirely (the default since per-file PNG cache made bulk memory non-issue).
+                    if (m_iMaxPicCount > 0 && m_dPictures.Count > m_iMaxPicCount)
                     {
+                        m_bCapReached = true;
                         if (oAlbumFoundEvent != null)
                             oAlbumFoundEvent(m_dPictures.Count, GetRandomPicture());
                         break;
@@ -199,44 +388,90 @@ namespace AlbumCoverFinder
             {
                 Console.WriteLine(pathEx.Message);
             }
-
-            return;
         }
 
-
-
-        /// <summary>
-        /// Loads a previously saved database of album covers as a serialized hashtable
-        /// By default : 
-        /// user folder \ScreenSaverPictures.bin
-        /// </summary>
         private void LoadBackupData()
         {
-            Stream openFileStream = null;
+            m_dPictures = new Dictionary<string, Image>();
+            m_aOrderedKeys.Clear();
+
             try
             {
-                if (File.Exists(m_sConfigFile))
-                {
-                    Console.WriteLine("Reading saved file");
-                    openFileStream = File.OpenRead(m_sConfigFile);
-                    BinaryFormatter deserializer = new BinaryFormatter();
-                    m_dPictures = (Dictionary<string, Image>)deserializer.Deserialize(openFileStream);
-                    openFileStream.Close();
-                    if (oAlbumFoundEvent != null)
-                        oAlbumFoundEvent(m_dPictures.Count, GetRandomPicture());
-
-                }
-                else
-                    m_dPictures = new Dictionary<string, Image>();
+                if (File.Exists(m_sIndexFile))
+                    LoadFromCacheDir();
             }
             catch
             {
                 m_dPictures = new Dictionary<string, Image>();
-                if (openFileStream != null)
-                    openFileStream.Close();
-                File.Delete(m_sConfigFile);
+                m_aOrderedKeys.Clear();
             }
 
+            m_iLastBackupCount = m_dPictures.Count;
+            if (oAlbumFoundEvent != null && m_dPictures.Count > 0)
+                oAlbumFoundEvent(m_dPictures.Count, GetRandomPicture());
+        }
+
+        private void LoadFromCacheDir()
+        {
+            string[] lines;
+            try { lines = File.ReadAllLines(m_sIndexFile); }
+            catch { return; }
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string sKey = lines[i];
+                if (string.IsNullOrEmpty(sKey)) continue;
+                if (m_dPictures.ContainsKey(sKey)) continue;
+                string sPngPath = Path.Combine(m_sCacheDir, i + ".png");
+                if (!File.Exists(sPngPath)) continue;
+                try
+                {
+                    Image img = LoadImageNoLock(sPngPath);
+                    m_dPictures[sKey] = img;
+                    m_aOrderedKeys.Add(sKey);
+
+                    // Metadata sidecar - optional, missing is fine for caches written
+                    // before metadata support landed.
+                    string sJsonPath = Path.Combine(m_sCacheDir, i + ".json");
+                    if (File.Exists(sJsonPath))
+                    {
+                        try
+                        {
+                            var meta = JsonSerializer.Deserialize<AlbumMetadata>(File.ReadAllText(sJsonPath));
+                            if (meta != null)
+                            {
+                                m_dMetadata[sKey] = meta;
+                                // Seed the dedup pool with what we already have on disk.
+                                // Old sidecars without hash info simply aren't part of
+                                // the pool - their dedup is best-effort and gets fixed
+                                // on the first scan that actually re-encounters them.
+                                if (meta.CoverByteLength > 0 && !string.IsNullOrEmpty(meta.CoverHash))
+                                    RegisterHash(meta.CoverByteLength, meta.CoverHash);
+                            }
+                        }
+                        catch { /* corrupt sidecar - skip silently */ }
+                    }
+                }
+                catch
+                {
+                    // Skip unreadable / corrupt cover but keep going.
+                }
+            }
+        }
+
+        /// <summary>
+        /// Loads a PNG into an in-memory Bitmap without holding a lock on the source file.
+        /// </summary>
+        private static Image LoadImageNoLock(string p_sPath)
+        {
+            using (FileStream fs = new FileStream(p_sPath, FileMode.Open, FileAccess.Read))
+                return new Bitmap(fs);
+        }
+
+        private void EnsureCacheDir()
+        {
+            if (!Directory.Exists(m_sCacheDir))
+                Directory.CreateDirectory(m_sCacheDir);
         }
 
         private void SaveBackupData(int p_iLastCount)
@@ -245,36 +480,119 @@ namespace AlbumCoverFinder
                 return;
             try
             {
-                Stream SaveFileStream = File.Create(m_sConfigFile);
-                BinaryFormatter serializer = new BinaryFormatter();
-                serializer.Serialize(SaveFileStream, m_dPictures);
-                SaveFileStream.Close();
+                EnsureCacheDir();
+
+                HashSet<string> oAlreadyOnDisk = new HashSet<string>(m_aOrderedKeys);
+                List<string> aNewKeys = new List<string>();
+
+                foreach (KeyValuePair<string, Image> kvp in m_dPictures)
+                {
+                    if (oAlreadyOnDisk.Contains(kvp.Key)) continue;
+                    int iIndex = m_aOrderedKeys.Count + aNewKeys.Count;
+                    string sPngPath = Path.Combine(m_sCacheDir, iIndex + ".png");
+                    try
+                    {
+                        using (Bitmap oCopy = new Bitmap(kvp.Value))
+                            oCopy.Save(sPngPath, ImageFormat.Png);
+                        aNewKeys.Add(kvp.Key);
+
+                        // Write the metadata sidecar if we captured any during scan.
+                        AlbumMetadata meta;
+                        if (m_dMetadata.TryGetValue(kvp.Key, out meta))
+                        {
+                            try
+                            {
+                                string sJsonPath = Path.Combine(m_sCacheDir, iIndex + ".json");
+                                File.WriteAllText(sJsonPath, JsonSerializer.Serialize(meta, s_jsonOpts));
+                            }
+                            catch { /* sidecar IO failure is non-fatal */ }
+                        }
+                    }
+                    catch
+                    {
+                        // Skip the cover that failed to save; the next scan can retry.
+                    }
+                }
+
+                if (aNewKeys.Count > 0)
+                {
+                    File.AppendAllLines(m_sIndexFile, aNewKeys);
+                    m_aOrderedKeys.AddRange(aNewKeys);
+                }
+
                 m_iLastBackupCount = p_iLastCount;
             }
-            catch { }
+            catch
+            {
+                // Best-effort persistence; an IO failure shouldn't crash a background scan.
+            }
         }
 
         private bool AddInfoAndPictureFromFile(string p_sFile)
         {
-            string sKey;
-            Bitmap oImage;
             try
             {
-                Mp3File oFile = new Mp3File(p_sFile);
-                sKey = oFile.TagHandler.Artist + oFile.TagHandler.Album;
-
-                if (!m_dPictures.ContainsKey(sKey) && oFile.TagHandler.Picture != null)
+                using (TagLib.File oFile = TagLib.File.Create(p_sFile))
                 {
-                    oImage = ResizeImage(oFile.TagHandler.Picture, 128, 120);
+                    string sArtist = !string.IsNullOrEmpty(oFile.Tag.FirstAlbumArtist)
+                        ? oFile.Tag.FirstAlbumArtist
+                        : oFile.Tag.FirstPerformer ?? string.Empty;
+                    string sAlbum = oFile.Tag.Album ?? string.Empty;
+                    string sKey = BuildKey(sArtist, sAlbum);
+
+                    if (string.IsNullOrEmpty(sKey)) return false;
+                    if (m_dPictures.ContainsKey(sKey)) return true;
+
+                    var pictures = oFile.Tag.Pictures;
+                    if (pictures == null || pictures.Length == 0) return false;
+
+                    byte[] pictureData = pictures[0].Data.Data;
+                    if (pictureData == null || pictureData.Length == 0) return false;
+
+                    // Dedup gate: same byte count is a necessary condition for
+                    // byte-identical images, so we only hash when there's actually
+                    // a chance of a collision. This keeps cheap-case scans fast.
+                    int byteLen = pictureData.Length;
+                    string coverHash = null;
+                    if (m_dHashesByLength.TryGetValue(byteLen, out var existingHashes))
+                    {
+                        coverHash = ComputeSha256Hex(pictureData);
+                        if (existingHashes.Contains(coverHash))
+                        {
+                            // Identical artwork already in the cache under a different
+                            // artist+album (e.g. a compilation track). Skip silently;
+                            // m_dPictures stays as-is.
+                            return true;
+                        }
+                    }
+                    if (coverHash == null) coverHash = ComputeSha256Hex(pictureData);
+
+                    Bitmap oImage;
+                    using (var ms = new MemoryStream(pictureData))
+                    using (var src = new Bitmap(ms))
+                    {
+                        oImage = ResizeImage(src, 384, 384);
+                    }
+
                     m_dPictures.Add(sKey, oImage);
-                    m_aReadFiles.Add(p_sFile);
+                    m_dMetadata[sKey] = new AlbumMetadata
+                    {
+                        Artist = sArtist,
+                        Album = sAlbum,
+                        Year = (int)oFile.Tag.Year,
+                        Genre = oFile.Tag.FirstGenre ?? string.Empty,
+                        CoverByteLength = byteLen,
+                        CoverHash = coverHash
+                    };
+                    RegisterHash(byteLen, coverHash);
                     if (oAlbumFoundEvent != null)
                         oAlbumFoundEvent(m_dPictures.Count, oImage);
+                    return true;
                 }
-                return true;
             }
             catch
             {
+                // Unsupported format, corrupt tag, locked file - skip and continue scanning.
                 return false;
             }
         }

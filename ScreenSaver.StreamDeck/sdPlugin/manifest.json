@@ -1,0 +1,38 @@
+{
+  "Author": "Ant",
+  "CodePath": "com.blashyrkh.screensaver.exe",
+  "Description": "Mirrors the currently-playing album cover to a single Stream Deck key, or spreads one cover across 4 (2x2) or 9 (3x3) keys. Each key gets its own configurable action: play/pause, next, previous, stop, volume +/-, or mute.",
+  "Name": "ScreenSaver Cover Tile",
+  "Icon": "icons/plugin",
+  "URL": "https://github.com/BlashyrkhRavenDark/ScreenSaver",
+  "Version": "1.0.0",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.5"
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Category": "ScreenSaver",
+  "CategoryIcon": "icons/category",
+  "Actions": [
+    {
+      "Name": "Cover Tile",
+      "UUID": "com.blashyrkh.screensaver.covertile",
+      "Icon": "icons/cover-tile",
+      "Tooltip": "Show a slice of the currently-playing album cover. Configurable on-press action (play/pause, next, previous, volume +/-, mute).",
+      "PropertyInspectorPath": "property_inspector/inspector.html",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "icons/cover-tile",
+          "TitleAlignment": "bottom",
+          "FontSize": "10"
+        }
+      ]
+    }
+  ]
+}

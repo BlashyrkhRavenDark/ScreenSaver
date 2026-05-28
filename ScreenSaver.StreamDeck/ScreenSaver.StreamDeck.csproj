@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- windows10.0.19041.0 unlocks Windows.Media.Control SMTC APIs -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>ScreenSaver.StreamDeck</RootNamespace>
+    <AssemblyName>com.blashyrkh.screensaver</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- See AlbumCoverFinder.csproj for why bin/obj are redirected. -->
+    <BaseOutputPath>..\out\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>..\out\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      BarRaider's streamdeck-tools - the standard .NET wrapper around the
+      Stream Deck Plugin SDK (WebSocket protocol).
+      Track latest: https://www.nuget.org/packages/streamdeck-tools
+    -->
+    <PackageReference Include="streamdeck-tools" Version="6.0.0" />
+    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
+    <!-- Newtonsoft.Json comes transitively via streamdeck-tools, but we use JObject
+         directly so an explicit reference avoids breakage on future upgrades. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Reuse the screensaver's SMTC monitor verbatim - keeps a single source of truth.
+    -->
+    <Compile Include="..\ScreenSaver\NowPlayingMonitor.cs" Link="NowPlayingMonitor.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="sdPlugin\manifest.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="sdPlugin\property_inspector\inspector.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

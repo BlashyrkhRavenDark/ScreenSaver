@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ScreenSaver Companion</title>
+  <style>
+    :root {
+      --bg: #0f0f10;
+      --panel: #1c1c1f;
+      --border: #2a2a2e;
+      --text: #ececec;
+      --muted: #9a9a9a;
+      --accent: #ffd700;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.4;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    h1 { font-size: 1rem; margin: 0 0 0.5rem 0; font-weight: 500; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+    .now-playing {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .now-playing img {
+      width: 96px;
+      height: 96px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #000;
+      flex-shrink: 0;
+    }
+    .now-playing .meta { flex: 1; min-width: 0; }
+    .now-playing .title { font-size: 1.15rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .now-playing .artist { color: var(--muted); margin-top: 0.15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .now-playing .album { color: var(--muted); font-style: italic; font-size: 0.95rem; }
+    .search {
+      margin: 1rem 1.25rem 0.75rem;
+    }
+    .search input {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .stats { color: var(--muted); font-size: 0.85rem; margin: 0 1.25rem 0.5rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 6px;
+      padding: 0 1.25rem 2rem;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      aspect-ratio: 1;
+      position: relative;
+      cursor: pointer;
+      transition: transform 80ms ease;
+    }
+    .card:hover { transform: scale(1.03); border-color: var(--accent); }
+    .card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .card .label {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 4px 6px;
+      background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0));
+      font-size: 0.75rem;
+      color: #fff;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .card .hide-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      border: none;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .card:hover .hide-btn { display: flex; }
+    .card .hide-btn:hover { background: #dc2626; }
+    .card.hiding { opacity: 0.3; pointer-events: none; }
+    .lightbox {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.92);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      padding: 2rem;
+      z-index: 100;
+    }
+    .lightbox img { max-width: 90vw; max-height: 75vh; border-radius: 8px; }
+    .lightbox .info { color: #fff; margin-top: 1rem; text-align: center; max-width: 90vw; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Now Playing</h1>
+  <div class="now-playing" id="np">
+    <img id="np-cover" src="/now-playing.png" alt="" onerror="this.style.visibility='hidden'">
+    <div class="meta">
+      <div class="title" id="np-title">Nothing playing</div>
+      <div class="artist" id="np-artist"></div>
+      <div class="album" id="np-album"></div>
+    </div>
+  </div>
+</header>
+
+<div class="search">
+  <input id="q" type="search" placeholder="Search your library by artist, album, or genre..." autocomplete="off" />
+</div>
+<div class="stats" id="stats"></div>
+<div class="grid" id="grid"></div>
+
+<div class="lightbox" id="lb" onclick="closeLightbox()">
+  <img id="lb-img" />
+  <div class="info" id="lb-info"></div>
+</div>
+
+<script>
+  let library = [];
+
+  async function refreshNowPlaying() {
+    try {
+      const r = await fetch('/now-playing.json', { cache: 'no-store' });
+      const d = await r.json();
+      const title = document.getElementById('np-title');
+      const artist = document.getElementById('np-artist');
+      const album = document.getElementById('np-album');
+      const cover = document.getElementById('np-cover');
+      if (!d.playing) {
+        title.textContent = 'Nothing playing';
+        artist.textContent = '';
+        album.textContent = '';
+        cover.style.visibility = 'hidden';
+      } else {
+        title.textContent = d.title || '(untitled)';
+        artist.textContent = d.artist || '';
+        const yearGenre = [d.year > 0 ? d.year : '', d.genre || ''].filter(Boolean).join(' - ');
+        album.textContent = d.album ? (yearGenre ? d.album + ' (' + yearGenre + ')' : d.album) : '';
+        cover.style.visibility = 'visible';
+        cover.src = '/now-playing.png?ts=' + Date.now();
+      }
+    } catch { /* keep the last good state */ }
+  }
+
+  async function loadLibrary() {
+    const r = await fetch('/index.json', { cache: 'no-store' });
+    library = await r.json();
+    document.getElementById('stats').textContent =
+      library.length + ' albums in your library';
+    renderGrid();
+  }
+
+  function renderGrid() {
+    const q = (document.getElementById('q').value || '').toLowerCase().trim();
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    const match = q
+      ? library.filter(it =>
+          (it.artist || '').toLowerCase().includes(q) ||
+          (it.album || '').toLowerCase().includes(q) ||
+          (it.genre || '').toLowerCase().includes(q) ||
+          (it.year && String(it.year).includes(q)))
+      : library;
+    document.getElementById('stats').textContent =
+      match.length === library.length
+        ? library.length + ' albums in your library'
+        : match.length + ' of ' + library.length + ' shown';
+    for (const it of match) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.onclick = (e) => {
+        // Don't open lightbox when the × is clicked - the hide handler took it.
+        if (e.target && e.target.classList && e.target.classList.contains('hide-btn')) return;
+        openLightbox(it);
+      };
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.src = '/cover/' + it.index + '.png';
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = (it.artist || '?') + ' - ' + (it.album || '?');
+      const hide = document.createElement('button');
+      hide.className = 'hide-btn';
+      hide.title = 'Hide this album';
+      hide.textContent = '×'; // ×
+      hide.onclick = (e) => { e.stopPropagation(); hideCover(card, it); };
+      card.appendChild(img);
+      card.appendChild(label);
+      card.appendChild(hide);
+      grid.appendChild(card);
+    }
+  }
+
+  async function hideCover(card, it) {
+    card.classList.add('hiding');
+    try {
+      const r = await fetch('/hide?index=' + it.index, { method: 'POST' });
+      if (!r.ok && r.status !== 204) {
+        card.classList.remove('hiding');
+        return;
+      }
+      // Re-fetch so indices renumber and the hidden one disappears.
+      await loadLibrary();
+    } catch {
+      card.classList.remove('hiding');
+    }
+  }
+
+  function openLightbox(it) {
+    const lb = document.getElementById('lb');
+    document.getElementById('lb-img').src = '/cover/' + it.index + '.png';
+    const yearGenre = [it.year > 0 ? it.year : '', it.genre || ''].filter(Boolean).join(' - ');
+    document.getElementById('lb-info').textContent =
+      (it.artist || '?') + '  -  ' + (it.album || '?') + (yearGenre ? '  -  ' + yearGenre : '');
+    lb.style.display = 'flex';
+  }
+
+  function closeLightbox() {
+    document.getElementById('lb').style.display = 'none';
+  }
+
+  document.getElementById('q').addEventListener('input', renderGrid);
+
+  refreshNowPlaying();
+  loadLibrary();
+  setInterval(refreshNowPlaying, 5000);
+</script>
+
+</body>
+</html>

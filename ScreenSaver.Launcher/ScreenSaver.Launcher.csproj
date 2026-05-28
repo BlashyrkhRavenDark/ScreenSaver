@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>ScreenSaver.Launcher</RootNamespace>
+    <!-- Output exe is named ScreenSaver.exe so the .scr we drop in System32
+         matches naming used elsewhere in the project. -->
+    <AssemblyName>ScreenSaver</AssemblyName>
+    <UseWindowsForms>false</UseWindowsForms>
+    <ApplicationIcon>..\icons\app.ico</ApplicationIcon>
+
+    <!--
+      This is a TINY launcher. The previous self-contained-single-file approach
+      for the main screensaver triggered Bitdefender (large + compressed payload
+      + System32 + unsigned). For this launcher we strip the dangerous bits:
+        - framework-dependent (no embedded .NET runtime, no large payload)
+        - single-file (System32 only takes one file)
+        - NO compression (compressed embedded code is what trips packer heuristics)
+      Resulting exe is ~200-300 KB and contains just our trivial registry read +
+      Process.Start. NativeAOT would be even smaller but needs MSVC build tools
+      installed; users without it fall back here.
+    -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <!-- See AlbumCoverFinder.csproj for why bin/obj are redirected. -->
+    <BaseOutputPath>..\out\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>..\out\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+  </PropertyGroup>
+
+</Project>

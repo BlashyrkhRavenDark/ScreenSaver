@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System;
 using System.Windows.Forms;
 using AlbumCoverFinder;
 
@@ -10,25 +8,27 @@ namespace ScreenSaver
     {
         /// <summary>
         /// The main entry point for the application.
-        /// Parses arguments and launches relevant section of the program
+        /// Parses arguments and launches relevant section of the program.
         /// </summary>
         [STAThread]
         static void Main(string[] p_aArgs)
         {
-            string sFirstArg = "";
+            string sFirstArg = string.Empty;
             string sSecondArg = null;
-            AlbumCoverFinder.AlbumCoverMgr oCoverMgr;
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            oCoverMgr = new AlbumCoverFinder.AlbumCoverMgr();               // 1 instance of cover manager is enough for multiple screens
-            ParseCommandLineArgs(ref sFirstArg, ref sSecondArg, p_aArgs);   // Let's sort the arguments
 
-            if (sFirstArg == "")                                            // No arguments - treat like /c
+            AlbumCoverMgr oCoverMgr = new AlbumCoverMgr();
+            NowPlayingMonitor oNowPlaying = new NowPlayingMonitor(oCoverMgr.GetPictureByKey);
+
+            ParseCommandLineArgs(ref sFirstArg, ref sSecondArg, p_aArgs);
+
+            if (sFirstArg == string.Empty || sFirstArg == "/c")
+            {
                 Application.Run(new AlbumCoverFinderForm());
-            else if (sFirstArg == "/c")                                     // Configuration mode
-                Application.Run(new AlbumCoverFinderForm());
-            else if (sFirstArg == "/p")                                     // Preview mode
+            }
+            else if (sFirstArg == "/p")
             {
                 if (sSecondArg == null)
                 {
@@ -37,14 +37,14 @@ namespace ScreenSaver
                     return;
                 }
                 IntPtr previewWndHandle = new IntPtr(long.Parse(sSecondArg));
-                Application.Run(new ScreenSaverForm(previewWndHandle, oCoverMgr));
+                Application.Run(new ScreenSaverForm(previewWndHandle, oCoverMgr, oNowPlaying));
             }
-            else if (sFirstArg == "/s")                                     // Full-screen mode
+            else if (sFirstArg == "/s")
             {
-                ShowScreenSaver(oCoverMgr);
+                ShowScreenSaver(oCoverMgr, oNowPlaying);
                 Application.Run();
             }
-            else                                                            // Undefined argument
+            else
             {
                 MessageBox.Show("Sorry, but the command line argument \"" + sFirstArg +
                     "\" is not valid.", "ScreenSaver",
@@ -53,16 +53,16 @@ namespace ScreenSaver
         }
 
         /// <summary>
-        /// Display the form on each of the computer's monitors.
+        /// Display the form on each of the computer's monitors. All forms share the
+        /// same AlbumCoverMgr and NowPlayingMonitor instances so SMTC isn't queried
+        /// once per screen and so cover lookups stay cache-coherent.
         /// </summary>
-        static void ShowScreenSaver(AlbumCoverFinder.AlbumCoverMgr p_oCoverMgr)
+        static void ShowScreenSaver(AlbumCoverMgr p_oCoverMgr, NowPlayingMonitor p_oNowPlaying)
         {
-            int i = 0;
             foreach (Screen oScreen in Screen.AllScreens)
             {
-                ScreenSaverForm oScreensaver = new ScreenSaverForm(oScreen.Bounds, p_oCoverMgr);
+                ScreenSaverForm oScreensaver = new ScreenSaverForm(oScreen.Bounds, p_oCoverMgr, p_oNowPlaying);
                 oScreensaver.Show();
-                i++;
             }
         }
 
@@ -71,8 +71,6 @@ namespace ScreenSaver
         /// Possible examples: /c:1234567 or /P 1232154231 or /s
         /// Argument /p takes a long as second argument as handle to a window within which to draw the screensaver
         /// </summary>
-        /// <param name="p_aArgs"></param>
-        /// <returns></returns>
         static void ParseCommandLineArgs(ref string p_sFirstArg, ref string p_sSecondArg, string[] p_aArgs)
         {
             if (p_aArgs.Length > 0)
