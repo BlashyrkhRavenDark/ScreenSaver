@@ -113,18 +113,11 @@ namespace ScreenSaver
             m_oCoverMgr = pCoverMgr;
             m_oNowPlaying = pNowPlaying;
             InitializeComponent();
-            m_oCoverMgr = pCoverMgr;
-            m_iXCovers = 3;
-            m_iYCovers = 3;
-            m_iCoverWidth = 50;
-            m_iCoverHeight = 50;
-            m_aPictureBoxes = new PictureBox[m_iXCovers, m_iYCovers];
 
             SetParent(this.Handle, PreviewWndHandle);
             SetWindowLong(this.Handle, -16, new IntPtr(GetWindowLong(this.Handle, -16) | 0x40000000));
             Rectangle ParentRect;
             GetClientRect(PreviewWndHandle, out ParentRect);
-
             Size = ParentRect.Size;
             Location = new Point(0, 0);
             m_bPreviewMode = true;

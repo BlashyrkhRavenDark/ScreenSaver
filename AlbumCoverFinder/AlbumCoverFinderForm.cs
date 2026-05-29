@@ -26,8 +26,8 @@ namespace AlbumCoverFinder
         {
             if (tDisplayUpdate.InvokeRequired)
             {
-                var d = new NewCoverFound(NewCoverFoundCallback);
-                tDisplayUpdate.Invoke(d, new object[] {p_oPicture });
+                var d = new AlbumFound(AlbumFoundCallback);
+                tDisplayUpdate.Invoke(d, new object[] { p_iAlbumFounds, p_oPicture });
             }
             else
             {
@@ -36,7 +36,7 @@ namespace AlbumCoverFinder
                     sStatus += " (cap of " + oCoverMgr.MaxPicCount + " reached - extra albums skipped)";
                 tDisplayUpdate.Text = sStatus;
                 if (p_oPicture != null)
-                    pictureBox1.Image = oCoverMgr.GetRandomPicture(320,320);
+                    pictureBox1.Image = p_oPicture;
             }
         }
 

@@ -10,26 +10,6 @@ using System.Text.Json;
 
 namespace AlbumCoverFinder
 {
-
-
-
-    #region cloud function classes
-    /// <summary>
-    /// Classes used by the gcp cloud function to serialize into a json file the file names and the corresponding bucket download link
-    /// </summary>
-    public class AlbumAndCover
-    {
-        public string sFileName { get; set; }
-        public string sFileUrl { get; set; }
-    }
-
-    public class AlbumCovers
-    {
-        public List<AlbumAndCover> oAlbumAndCovers { get; set; }
-    }
-
-    #endregion
-
     /// <summary>
     /// Cover Manager class.
     ///
@@ -616,54 +596,6 @@ namespace AlbumCoverFinder
                 return false;
             }
         }
-
-
-         async Task<AlbumCovers> GetAsync(HttpClient p_httpClient, string p_sFunctionUrl, string sAuthTokenFile, string p_sCoverDirectory)
-        {
-            AlbumCovers oAlbumCoversFromJson;
-            string sLocalFilename;
-            WebClient oWebClient = new WebClient();
-            int iCpt = 0;
-
-            try
-            {
-                oCoverMessageEvent?.Invoke("\r\nConnecting to the cloud to get album covers.");
-                // Getting the Json file from the cloud function
-                oAlbumCoversFromJson = await p_httpClient.GetFromJsonAsync<AlbumCovers>(p_sFunctionUrl);
-
-                // Looping on the JSON file downloaded from the cloud to see what we got
-                if (oAlbumCoversFromJson != null)
-                {
-                    if (oCoverMessageEvent != null && oAlbumCoversFromJson.oAlbumAndCovers != null)
-                        oCoverMessageEvent("Albums found in the cloud: " + oAlbumCoversFromJson.oAlbumAndCovers.Count());
-                    foreach (AlbumAndCover oAAC in oAlbumCoversFromJson.oAlbumAndCovers)
-                    {
-                        sLocalFilename = p_sCoverDirectory + "\\" + oAAC.sFileName;
-                        if (!System.IO.File.Exists(sLocalFilename))
-                        {
-                            if (oCoverMessageEvent != null && oAlbumCoversFromJson.oAlbumAndCovers != null)
-                                oCoverMessageEvent("Downloading file: " + oAAC.sFileName);
-                            oWebClient.DownloadFile(oAAC.sFileUrl, sLocalFilename);
-                        }
-                        oProgressUpdateEvent?.Invoke(++iCpt, oAlbumCoversFromJson.oAlbumAndCovers.Count());
-                    }
-                    oCoverMessageEvent?.Invoke("Done processing Cloud Albums.");
-                }
-            }
-            catch (Exception ex)
-            {
-                oCoverMessageEvent?.Invoke("Error while trying to get cloud albums: " + ex.Message);
-                return null;
-            }
-            return null;
-
-        }
-        public string GetCloudCovers(string sFunctionUrl, string sAuthTokenFile)
-        {
-            GetAsync(oHttpClient, sFunctionUrl, sAuthTokenFile, m_sConfigFolder);
-            return "";
-        }
-
         #endregion
     }
 }
