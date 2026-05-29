@@ -106,6 +106,12 @@ Copy-Item -Recurse -Force "$src\*" $appDir
 $appExe = Join-Path $appDir "ScreenSaver.exe"
 
 # 3. Point Windows at it via the legacy screensaver registry.
+# NOTE: this points at the App exe as a FALLBACK so idle activation works even
+# when the System32 stub isn't installed (Step 4b skipped / UAC declined). If the
+# stub IS installed, Step 4b OVERRIDES this to point at the stub instead - that's
+# important, because the Windows screensaver picker only recognises .scr files in
+# System32: with SCRNSAVE.EXE pointing at a non-.scr exe the picker shows "(None)"
+# and can wipe the setting when opened. Pointing at the stub keeps us listed/selected.
 $desk = "HKCU:\Control Panel\Desktop"
 Set-ItemProperty -Path $desk -Name "SCRNSAVE.EXE" -Value $appExe -Type String
 # Make sure the screensaver is enabled and has a sensible timeout (10 min).
@@ -140,6 +146,15 @@ Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile", "-Command
 ```
 
 Verify with `Test-Path $env:WINDIR\System32\ScreenSaver.scr`. If false after the elevated call returned, the user declined UAC - mention that the screensaver still works via idle, just not in the picker.
+
+**If the stub installed successfully, point `SCRNSAVE.EXE` at the STUB** (overriding Step 4 #3's fallback). The Windows picker only understands `.scr` files in System32; with `SCRNSAVE.EXE` pointing at the App exe it shows "(None)" and clears the setting when opened. Pointing at the stub (which forwards to `ScreenSaverPath` = the App) keeps us listed and selected, and idle activation runs the stub → App.
+
+```powershell
+$stub = "$env:WINDIR\System32\ScreenSaver.scr"
+if (Test-Path $stub) {
+    Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "SCRNSAVE.EXE" -Value $stub -Type String
+}
+```
 
 If the user previously had a bigger ScreenSaver.scr in System32 from the older self-contained build, this step overwrites it with the small launcher.
 
