@@ -26,7 +26,8 @@ namespace AlbumCoverFinder
 
         // How many covers fit horizontally. 0 means "native" - the screensaver picks
         // the column count from the cached cover resolution (384 px tile).
-        public int CoversWide { get; set; }
+        // Defaults to 12 across.
+        public int CoversWide { get; set; } = 12;
 
         // Visual transition effect played when a tile's cover is swapped.
         public TransitionEffect Effect { get; set; } = TransitionEffect.Merge;
@@ -69,11 +70,11 @@ namespace AlbumCoverFinder
                     {
                         s.AlbumCap = ReadInt(key, "AlbumCap", 0);
                         s.SwapIntervalMs = Math.Max(100, ReadInt(key, "SwapIntervalMs", 1000));
-                        s.CoversWide = Math.Max(0, ReadInt(key, "CoversWide", 0));
+                        s.CoversWide = Math.Max(0, ReadInt(key, "CoversWide", 12));
                         s.Effect = (TransitionEffect)Math.Max(0, Math.Min(3, ReadInt(key, "TransitionEffect", (int)TransitionEffect.Merge)));
                         s.TransitionDurationMs = Math.Max(1000, Math.Min(10000, ReadInt(key, "TransitionDurationMs", 3000)));
                         s.GapBetweenTransitionsMs = Math.Max(1000, ReadInt(key, "GapBetweenTransitionsMs", 1000));
-                        s.WallpaperEnabled = ReadBool(key, "WallpaperEnabled", true);
+                        s.WallpaperEnabled = ReadBool(key, "WallpaperEnabled", false);
                         s.WallpaperIntervalMinutes = Math.Max(1, ReadInt(key, "WallpaperIntervalMinutes", 5));
                         s.LockScreenEnabled = ReadBool(key, "LockScreenEnabled", false);
                         s.LockScreenIntervalMinutes = Math.Max(5, ReadInt(key, "LockScreenIntervalMinutes", 60));

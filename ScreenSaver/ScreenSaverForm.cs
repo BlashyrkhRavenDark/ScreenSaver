@@ -73,6 +73,10 @@ namespace ScreenSaver
         private readonly FadingTile m_oFeatureTile = new FadingTile();
         private bool m_bFeatureVisible;
 
+        // "Artist — Title" of the current track, shown only while the mouse is moving
+        // (manage mode). Empty when nothing is playing.
+        private string m_sNowPlayingText = string.Empty;
+
         // Click-to-pin overlay (#2).
         private bool m_bPinned;
         private string m_sPinnedKey;
@@ -337,6 +341,21 @@ namespace ScreenSaver
             using (var br = new SolidBrush(Color.White))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 g.DrawString("Right-click any cover to hide it    -    Click or press Esc to exit", f, br, r, sf);
+
+            // Now-playing line (artist + song title), shown just below the hint.
+            if (!string.IsNullOrEmpty(m_sNowPlayingText))
+            {
+                int nh = 48;
+                var nr = new Rectangle((w - bw) / 2, r.Bottom + 10, bw, nh);
+                using (var bg = new SolidBrush(Color.FromArgb(190, 30, 30, 30)))
+                using (var f = new Font("Segoe UI", 16f, FontStyle.Bold))
+                using (var br = new SolidBrush(Color.White))
+                using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+                {
+                    g.FillRectangle(bg, nr);
+                    g.DrawString(m_sNowPlayingText, f, br, nr, sf);
+                }
+            }
         }
 
         private void PaintToast(Graphics g)
@@ -446,6 +465,7 @@ namespace ScreenSaver
             if (m_bPinned) return;
 
             m_sCurrentPlayingKey = AlbumCoverMgr.BuildKey(info.Artist, info.Album);
+            m_sNowPlayingText = BuildNowPlayingText(info);
             m_oFeatureTile.SetImage(info.Cover);
             m_bFeatureVisible = info.Cover != null;
 
@@ -456,10 +476,21 @@ namespace ScreenSaver
         private void OnNowPlayingCleared()
         {
             m_sCurrentPlayingKey = null;
+            m_sNowPlayingText = string.Empty;
             if (m_bPinned) return;
             m_bFeatureVisible = false;
             RefreshHighlights();
             Invalidate();
+        }
+
+        /// <summary>"Artist - Title" for the manage-mode now-playing line.</summary>
+        private static string BuildNowPlayingText(NowPlayingMonitor.NowPlayingInfo info)
+        {
+            string artist = info.Artist ?? string.Empty;
+            string title = info.Title ?? string.Empty;
+            if (string.IsNullOrEmpty(artist)) return title;
+            if (string.IsNullOrEmpty(title)) return artist;
+            return artist + "  —  " + title;
         }
 
         #endregion
