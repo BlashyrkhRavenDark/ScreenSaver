@@ -146,12 +146,9 @@ namespace ScreenSaver.StreamDeck
             if (!string.IsNullOrEmpty(base64))
                 await Connection.SetImageAsync(base64);
 
-            // Centre tile of any grid gets the title overlay; the others stay clean
-            // so the artwork reads as one image across the deck.
-            bool isCentre = m_oSettings.Row == m_oSettings.GridSize / 2
-                         && m_oSettings.Column == m_oSettings.GridSize / 2;
-            string title = isCentre ? (info.Artist ?? string.Empty) : string.Empty;
-            await Connection.SetTitleAsync(title);
+            // No title overlay on any tile, so the artwork reads as one clean
+            // image across the deck.
+            await Connection.SetTitleAsync(string.Empty);
         }
 
         private async void OnCleared()
