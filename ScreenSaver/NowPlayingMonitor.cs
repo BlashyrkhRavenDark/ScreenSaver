@@ -420,19 +420,13 @@ namespace ScreenSaver
                     return;
                 }
 
-                // Write JSON via temp-then-replace so a reader never sees a partial file.
-                string payload = JsonSerializer.Serialize(new
-                {
-                    title  = info.Title  ?? string.Empty,
-                    artist = info.Artist ?? string.Empty,
-                    album  = info.Album  ?? string.Empty
-                });
-                string jsonTmp = json + ".tmp";
-                System.IO.File.WriteAllText(jsonTmp, payload);
-                try { System.IO.File.Delete(json); } catch { }
-                System.IO.File.Move(jsonTmp, json);
-
-                // Write the cover PNG separately. Same temp-then-replace dance.
+                // ORDER MATTERS: write the cover PNG FIRST, then the JSON.
+                // Reader processes watch ONLY nowplaying.json and read the PNG
+                // alongside it. If the JSON (new track) landed before the PNG, a
+                // reader without a local cover cache (the Stream Deck plugin) would
+                // pair the new metadata with the still-stale PNG - rendering each
+                // tile one track behind. Writing the PNG first guarantees the cover
+                // already matches by the time the JSON-change event fires.
                 if (info.Cover != null)
                 {
                     string pngTmp = png + ".tmp";
@@ -445,6 +439,19 @@ namespace ScreenSaver
                 {
                     try { if (System.IO.File.Exists(png)) System.IO.File.Delete(png); } catch { }
                 }
+
+                // JSON last - its change event is the reader's wake-up, and the PNG
+                // above is now already current. Temp-then-replace so no partial read.
+                string payload = JsonSerializer.Serialize(new
+                {
+                    title  = info.Title  ?? string.Empty,
+                    artist = info.Artist ?? string.Empty,
+                    album  = info.Album  ?? string.Empty
+                });
+                string jsonTmp = json + ".tmp";
+                System.IO.File.WriteAllText(jsonTmp, payload);
+                try { System.IO.File.Delete(json); } catch { }
+                System.IO.File.Move(jsonTmp, json);
             }
             catch
             {
