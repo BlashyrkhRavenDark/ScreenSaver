@@ -178,9 +178,14 @@
     } catch { /* keep the last good state */ }
   }
 
+  // Bumped after every library reload so the browser can't serve stale
+  // /cover/N.png from cache when the indices renumber (e.g. after a hide).
+  let libraryVersion = Date.now();
+
   async function loadLibrary() {
     const r = await fetch('/index.json', { cache: 'no-store' });
     library = await r.json();
+    libraryVersion = Date.now();
     document.getElementById('stats').textContent =
       library.length + ' albums in your library';
     renderGrid();
@@ -211,7 +216,7 @@
       };
       const img = document.createElement('img');
       img.loading = 'lazy';
-      img.src = '/cover/' + it.index + '.png';
+      img.src = '/cover/' + it.index + '.png?v=' + libraryVersion;
       const label = document.createElement('div');
       label.className = 'label';
       label.textContent = (it.artist || '?') + ' - ' + (it.album || '?');
@@ -244,7 +249,7 @@
 
   function openLightbox(it) {
     const lb = document.getElementById('lb');
-    document.getElementById('lb-img').src = '/cover/' + it.index + '.png';
+    document.getElementById('lb-img').src = '/cover/' + it.index + '.png?v=' + libraryVersion;
     const yearGenre = [it.year > 0 ? it.year : '', it.genre || ''].filter(Boolean).join(' - ');
     document.getElementById('lb-info').textContent =
       (it.artist || '?') + '  -  ' + (it.album || '?') + (yearGenre ? '  -  ' + yearGenre : '');
