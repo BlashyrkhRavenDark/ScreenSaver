@@ -42,7 +42,11 @@ namespace ScreenSaver.Tray
             // Tray is the SOLE iTunes-COM poller on this machine. Everyone else
             // (screensaver, Stream Deck plugin) gets iTunes data via the shared
             // nowplaying.json/.png the polling instance publishes.
-            m_oMonitor = new global::ScreenSaver.NowPlayingMonitor(m_oCover.GetPictureByKey, pollItunes: true);
+            // coverPersist captures iTunes-cache-only artwork (art not embedded in the
+            // file) into the cover cache, so those albums join the mosaic after playing.
+            m_oMonitor = new global::ScreenSaver.NowPlayingMonitor(
+                m_oCover.GetPictureByKey, pollItunes: true,
+                coverPersist: (artist, album, cover) => m_oCover.AddCover(artist, album, cover));
             m_oWallpaper = new WallpaperRenderer(m_oCover);
             m_oLockScreen = new LockScreenRenderer(m_oCover);
             m_oHttp = new HttpCompanion(m_oCover, m_oMonitor);

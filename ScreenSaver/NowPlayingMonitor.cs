@@ -34,6 +34,10 @@ namespace ScreenSaver
         /// matching Image, or null if not in the cache.
         /// </summary>
         private readonly Func<string, Image> m_oCoverLookup;
+        // Optional callback to persist a cover that was NOT in the local cache (e.g.
+        // extracted from iTunes' artwork cache via COM) so it joins the mosaic. Only
+        // the iTunes-polling writer (the Tray) wires this up.
+        private readonly Action<string, string, Image> m_oCoverPersist;
         private GlobalSystemMediaTransportControlsSessionManager m_oManager;
         private GlobalSystemMediaTransportControlsSession m_oCurrentSession;
         private SynchronizationContext m_oUiCtx;
@@ -72,10 +76,15 @@ namespace ScreenSaver
         /// should set this true - the Tray is the designated owner; the screensaver
         /// and Stream Deck plugin both leave it false.
         /// </param>
-        public NowPlayingMonitor(Func<string, Image> coverLookup = null, bool pollItunes = false)
+        /// <param name="coverPersist">Optional callback (artist, album, cover) to save a
+        /// cover that wasn't in the local cache - used to capture iTunes-cache-only art
+        /// into the mosaic. Only meaningful alongside pollItunes = true.</param>
+        public NowPlayingMonitor(Func<string, Image> coverLookup = null, bool pollItunes = false,
+                                 Action<string, string, Image> coverPersist = null)
         {
             m_oCoverLookup = coverLookup;
             m_bPollItunes = pollItunes;
+            m_oCoverPersist = coverPersist;
         }
 
         /// <summary>
@@ -373,7 +382,15 @@ namespace ScreenSaver
                 // STA) when we DON'T already have the cover locally. For a scanned
                 // library this means SaveArtworkToFile is never called.
                 Image cover = m_oCoverLookup != null ? m_oCoverLookup(BuildKey(artist, album)) : null;
+                bool bFromCache = cover != null;
                 if (cover == null) cover = ExtractItunesArtwork(track);
+
+                // Cover came from iTunes (not our cache) - capture it into the mosaic
+                // cache so albums whose files lack embedded art still show up later.
+                if (!bFromCache && cover != null)
+                {
+                    try { m_oCoverPersist?.Invoke(artist, album, cover); } catch { /* non-fatal */ }
+                }
 
                 var info = new NowPlayingInfo
                 {

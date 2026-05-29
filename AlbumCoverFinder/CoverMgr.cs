@@ -48,6 +48,11 @@ namespace AlbumCoverFinder
         // (m_bLazyLoad = false) because it scans, edits, and re-saves the cache.
         private readonly bool m_bLazyLoad;
         private readonly Dictionary<string, string> m_dKeyToPng = new Dictionary<string, string>();
+        // Guards the cover/key collections. Needed because lazy decoding writes the
+        // decode cache from whatever thread calls GetImage (e.g. the iTunes file
+        // watcher / poll thread), and AddCover appends from the poll thread while the
+        // UI thread reads. A single coarse lock is plenty for these low-frequency ops.
+        private readonly object m_oSync = new object();
         private Dictionary<string, AlbumMetadata> m_dMetadata = new Dictionary<string, AlbumMetadata>();
         private List<string> m_aOrderedKeys = new List<string>();
         // Default cap is 0 = unlimited. Now that each cover is its own PNG file,
@@ -158,22 +163,25 @@ namespace AlbumCoverFinder
         /// </summary>
         public List<string> GetFilteredPool()
         {
-            if (m_aOrderedKeys.Count == 0) return new List<string>();
-
-            List<string> result = new List<string>(m_aOrderedKeys.Count);
-            foreach (string k in m_aOrderedKeys)
+            lock (m_oSync)
             {
-                if (!IsAvailable(k)) continue;
-                if (m_oBlocklist != null && m_oBlocklist.IsBlocked(k)) continue;
-                if (m_oFilter != null)
+                if (m_aOrderedKeys.Count == 0) return new List<string>();
+
+                List<string> result = new List<string>(m_aOrderedKeys.Count);
+                foreach (string k in m_aOrderedKeys)
                 {
-                    AlbumMetadata meta;
-                    m_dMetadata.TryGetValue(k, out meta);
-                    if (!m_oFilter.Matches(meta)) continue;
+                    if (!IsAvailable(k)) continue;
+                    if (m_oBlocklist != null && m_oBlocklist.IsBlocked(k)) continue;
+                    if (m_oFilter != null)
+                    {
+                        AlbumMetadata meta;
+                        m_dMetadata.TryGetValue(k, out meta);
+                        if (!m_oFilter.Matches(meta)) continue;
+                    }
+                    result.Add(k);
                 }
-                result.Add(k);
+                return result;
             }
-            return result;
         }
 
         /// <summary>
@@ -286,23 +294,73 @@ namespace AlbumCoverFinder
         private Image GetImage(string p_sKey)
         {
             if (string.IsNullOrEmpty(p_sKey)) return null;
-            Image img;
-            if (m_dPictures != null && m_dPictures.TryGetValue(p_sKey, out img)) return img;
-            if (m_dKeyToPng.TryGetValue(p_sKey, out string sPng))
+            lock (m_oSync)
             {
+                Image img;
+                if (m_dPictures != null && m_dPictures.TryGetValue(p_sKey, out img)) return img;
+                if (m_dKeyToPng.TryGetValue(p_sKey, out string sPng))
+                {
+                    try
+                    {
+                        img = LoadImageNoLock(sPng);
+                        if (img != null)
+                        {
+                            if (m_dPictures == null) m_dPictures = new Dictionary<string, Image>();
+                            m_dPictures[p_sKey] = img;
+                        }
+                        return img;
+                    }
+                    catch { return null; }
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Persists a cover fetched from somewhere other than the file's embedded tags
+        /// (e.g. iTunes' artwork cache, extracted via COM for the now-playing track) into
+        /// the shared cover cache, so it shows up in the mosaic on the next load. No-op if
+        /// the album is already known. Returns true if it was newly added.
+        ///
+        /// This is how albums whose .m4a files carry no embedded artwork (their art lives
+        /// only in iTunes' Album Artwork cache) get into the screensaver: play the track
+        /// once and the Tray captures its cover here.
+        /// </summary>
+        public bool AddCover(string p_sArtist, string p_sAlbum, Image p_oCover)
+        {
+            if (p_oCover == null) return false;
+            string key = BuildKey(p_sArtist, p_sAlbum);
+            if (string.IsNullOrEmpty(key)) return false;
+
+            lock (m_oSync)
+            {
+                if (IsAvailable(key)) return false;
                 try
                 {
-                    img = LoadImageNoLock(sPng);
-                    if (img != null)
-                    {
-                        if (m_dPictures == null) m_dPictures = new Dictionary<string, Image>();
-                        m_dPictures[p_sKey] = img;
-                    }
-                    return img;
+                    if (!Directory.Exists(m_sCacheDir)) Directory.CreateDirectory(m_sCacheDir);
+
+                    // Index line N maps to N.png - append, so the new line's index is the
+                    // current line count.
+                    string[] lines = File.Exists(m_sIndexFile) ? File.ReadAllLines(m_sIndexFile) : Array.Empty<string>();
+                    int idx = lines.Length;
+                    string sPng = Path.Combine(m_sCacheDir, idx + ".png");
+
+                    using (var resized = ResizeImage(p_oCover, 384, 384))
+                        resized.Save(sPng, ImageFormat.Png);
+                    File.AppendAllLines(m_sIndexFile, new[] { key });
+
+                    var meta = new AlbumMetadata { Artist = p_sArtist ?? string.Empty, Album = p_sAlbum ?? string.Empty };
+                    try { File.WriteAllText(Path.Combine(m_sCacheDir, idx + ".json"), JsonSerializer.Serialize(meta, s_jsonOpts)); }
+                    catch { /* sidecar is optional */ }
+
+                    // In-memory: make it usable in THIS process immediately too.
+                    m_dKeyToPng[key] = sPng;
+                    m_aOrderedKeys.Add(key);
+                    m_dMetadata[key] = meta;
+                    return true;
                 }
-                catch { return null; }
+                catch { return false; }
             }
-            return null;
         }
 
         /// <summary>True if a cover exists for this key (decoded or lazily on disk).</summary>
@@ -345,7 +403,8 @@ namespace AlbumCoverFinder
         public int GetAlbumTotal()
         {
             // Count of known covers (decoded or lazily on disk), not just decoded ones.
-            return m_aOrderedKeys != null ? m_aOrderedKeys.Count : 0;
+            lock (m_oSync)
+                return m_aOrderedKeys != null ? m_aOrderedKeys.Count : 0;
         }
 
         public void DeleteAlbumBackup()
