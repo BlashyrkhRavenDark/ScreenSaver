@@ -212,7 +212,7 @@ namespace ScreenSaver
 
                 // Animation clock: advances transitions / highlight pulses and repaints
                 // only while something is actually animating.
-                m_oAnimTimer = new System.Windows.Forms.Timer { Interval = 33 };
+                m_oAnimTimer = new System.Windows.Forms.Timer { Interval = 16 };
                 m_oAnimTimer.Tick += OnAnimTick;
                 m_oAnimTimer.Start();
 
@@ -288,34 +288,56 @@ namespace ScreenSaver
             int w = ClientSize.Width, h = ClientSize.Height;
             if (w <= 0 || h <= 0) return;
 
+            // A freshly (re)allocated buffer has no valid contents, so it must be
+            // painted in full regardless of the invalidated region.
+            bool full = false;
             if (m_oBackBuffer == null || m_oBackBuffer.Width != w || m_oBackBuffer.Height != h)
             {
                 m_oBackBuffer?.Dispose();
                 m_oBackBuffer = new Bitmap(w, h);
+                full = true;
             }
+
+            // DIRTY-RECT: only repaint the invalidated region. The mosaic is mostly
+            // static - normally just one tile is mid-transition - so redrawing all
+            // ~84 tiles + clearing/blitting the whole 4K buffer every frame (the old
+            // behaviour) was what made transitions stutter. Here we clear only the
+            // dirty rect, redraw only the tiles that intersect it, and blit just that
+            // rect. GDI clips each draw, so non-intersecting tiles cost a cheap reject.
+            Rectangle clip = full ? new Rectangle(0, 0, w, h) : e.ClipRectangle;
+            if (clip.Width <= 0 || clip.Height <= 0) return;
 
             using (var g = Graphics.FromImage(m_oBackBuffer))
             {
-                g.Clear(Color.Black);
+                g.SetClip(clip);
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 g.SmoothingMode = SmoothingMode.HighQuality;
 
-                // Mosaic.
+                using (var black = new SolidBrush(Color.Black))
+                    g.FillRectangle(black, clip);
+
+                // Mosaic - only tiles overlapping the dirty rect.
                 for (int x = 0; x < m_iXCovers; x++)
                     for (int y = 0; y < m_iYCovers; y++)
-                        m_aTiles[x, y]?.Paint(g, TileRect(x, y));
+                    {
+                        Rectangle r = TileRect(x, y);
+                        if (r.IntersectsWith(clip))
+                            m_aTiles[x, y]?.Paint(g, r);
+                    }
 
-                // Feature cover (now-playing / pinned) drawn over the mosaic as a
-                // 2x2-tile cover. No shade, no text - it just reads as a bigger cover.
+                // Feature cover (now-playing / pinned) over the mosaic as a 2x2 cover.
                 if (m_bFeatureVisible)
-                    m_oFeatureTile.Paint(g, FeatureRect());
+                {
+                    Rectangle fr = FeatureRect();
+                    if (fr.IntersectsWith(clip)) m_oFeatureTile.Paint(g, fr);
+                }
 
-                // Transient text overlays.
+                // Transient text overlays (drawn last; GDI clips them to the dirty rect).
                 if (m_bManageHintVisible) PaintManageHint(g);
                 if (m_bToastVisible) PaintToast(g);
             }
 
-            e.Graphics.DrawImageUnscaled(m_oBackBuffer, 0, 0);
+            e.Graphics.DrawImage(m_oBackBuffer, clip, clip, GraphicsUnit.Pixel);
         }
 
         /// <summary>The centered 2x2-tile block the feature (now-playing/pinned) cover
@@ -371,21 +393,28 @@ namespace ScreenSaver
                 g.DrawString(m_sToastText, f, br, r, sf);
         }
 
-        /// <summary>Repaint while anything is animating (fades, highlight pulse).</summary>
+        /// <summary>Advance animations and invalidate ONLY the tiles/feature that are
+        /// actually animating (fades + highlight pulses), so each frame repaints a
+        /// couple of small rects instead of the whole 4K surface.</summary>
         private void OnAnimTick(object sender, EventArgs e)
         {
-            bool animating = false;
             if (m_aTiles != null)
-                foreach (var t in m_aTiles)
-                {
-                    if (t == null) continue;
-                    t.Advance();
-                    if (t.Animating) animating = true;
-                }
-            m_oFeatureTile.Advance();
-            if (m_bFeatureVisible && m_oFeatureTile.Animating) animating = true;
+                for (int x = 0; x < m_iXCovers; x++)
+                    for (int y = 0; y < m_iYCovers; y++)
+                    {
+                        var t = m_aTiles[x, y];
+                        if (t == null) continue;
+                        bool was = t.Animating;
+                        t.Advance();
+                        // Repaint while animating, plus the one frame it settles
+                        // (was=true, now=false) so the final image lands.
+                        if (was || t.Animating) Invalidate(TileRect(x, y));
+                    }
 
-            if (animating) Invalidate();
+            bool featWas = m_oFeatureTile.Animating;
+            m_oFeatureTile.Advance();
+            if (m_bFeatureVisible && (featWas || m_oFeatureTile.Animating))
+                Invalidate(FeatureRect());
         }
 
         #endregion
@@ -412,8 +441,7 @@ namespace ScreenSaver
         private void moveTimer_Tick(object sender, EventArgs e)
         {
             m_iTickCounter++;
-            ChangePicture();
-            Invalidate();
+            ChangePicture(); // invalidates just the swapped tile; the anim timer drives its fade
         }
 
         private void ChangePicture()
@@ -436,6 +464,8 @@ namespace ScreenSaver
             m_aTiles[iX, iY].SetImage(entry.Value);
             m_aTileKeys[iX, iY] = entry.Key;
 
+            // Kick off the swapped tile's transition; the anim timer carries the rest.
+            Invalidate(TileRect(iX, iY));
             RefreshHighlights();
         }
 
@@ -470,7 +500,7 @@ namespace ScreenSaver
             m_bFeatureVisible = info.Cover != null;
 
             RefreshHighlights();
-            Invalidate();
+            Invalidate(FeatureRect());
         }
 
         private void OnNowPlayingCleared()
@@ -478,9 +508,10 @@ namespace ScreenSaver
             m_sCurrentPlayingKey = null;
             m_sNowPlayingText = string.Empty;
             if (m_bPinned) return;
+            Rectangle fr = FeatureRect();
             m_bFeatureVisible = false;
             RefreshHighlights();
-            Invalidate();
+            Invalidate(fr); // repaint the 4 central tiles now that the cover is gone
         }
 
         /// <summary>"Artist - Title" for the manage-mode now-playing line.</summary>
@@ -629,7 +660,7 @@ namespace ScreenSaver
 
             m_oFeatureTile.SetImage(img);
             m_bFeatureVisible = true;
-            Invalidate();
+            Invalidate(FeatureRect());
         }
 
         private void Unpin()
