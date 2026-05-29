@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.IO;
 using System.Threading.Tasks;
 using BarRaider.SdTools;
@@ -133,14 +134,15 @@ namespace ScreenSaver.StreamDeck
                 return;
             }
 
-            // Cache key: cover identity + this tile's crop parameters. If neither
-            // changed, skip the work.
+            // Cache key: cover identity + this tile's crop parameters + the action
+            // (so the badge updates when the user reassigns the key).
             string hash = (info.Title ?? "") + "|" + (info.Artist ?? "") + "|"
-                          + m_oSettings.GridSize + "|" + m_oSettings.Row + "|" + m_oSettings.Column;
+                          + m_oSettings.GridSize + "|" + m_oSettings.Row + "|" + m_oSettings.Column
+                          + "|" + m_oSettings.Action;
             if (hash == m_sLastRenderedHash) return;
             m_sLastRenderedHash = hash;
 
-            string base64 = RenderTile(info.Cover, m_oSettings.GridSize, m_oSettings.Row, m_oSettings.Column);
+            string base64 = RenderTile(info.Cover, m_oSettings.GridSize, m_oSettings.Row, m_oSettings.Column, m_oSettings.Action);
             if (!string.IsNullOrEmpty(base64))
                 await Connection.SetImageAsync(base64);
 
@@ -166,10 +168,12 @@ namespace ScreenSaver.StreamDeck
         }
 
         /// <summary>
-        /// Crops the (row, column) slice of an NxN grid out of the source cover and
-        /// returns it as a Stream-Deck-friendly base64 data URL.
+        /// Crops the (row, column) slice of an NxN grid out of the source cover,
+        /// stamps a small action badge in the lower-left corner indicating which
+        /// media control this key triggers, and returns the result as a
+        /// Stream-Deck-friendly base64 data URL.
         /// </summary>
-        private static string RenderTile(Image source, int gridSize, int row, int column)
+        private static string RenderTile(Image source, int gridSize, int row, int column, KeyAction action)
         {
             try
             {
@@ -189,10 +193,14 @@ namespace ScreenSaver.StreamDeck
                 {
                     g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                     g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
                     g.DrawImage(source,
                         new Rectangle(0, 0, 144, 144),
                         new Rectangle(srcX, srcY, cellSide, cellSide),
                         GraphicsUnit.Pixel);
+
+                    DrawActionBadge(g, action);
+
                     bmp.Save(ms, ImageFormat.Png);
                     return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
                 }
@@ -201,6 +209,58 @@ namespace ScreenSaver.StreamDeck
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Draws a small translucent badge with a Segoe MDL2 glyph in the lower-left
+        /// of the 144x144 tile, hinting at the on-press action. Skipped for None.
+        /// Segoe MDL2 Assets is included on every Windows 10/11 install.
+        /// </summary>
+        private static void DrawActionBadge(Graphics g, KeyAction action)
+        {
+            string glyph = action switch
+            {
+                KeyAction.PlayPause  => "", // Play
+                KeyAction.Next       => "", // Next
+                KeyAction.Previous   => "", // Previous
+                KeyAction.Stop       => "", // Stop
+                KeyAction.VolumeUp   => "", // Volume3
+                KeyAction.VolumeDown => "", // Volume1
+                KeyAction.Mute       => "", // Mute
+                _ => null
+            };
+            if (glyph == null) return;
+
+            const int padding = 8;
+            const int size = 36;
+            var badgeRect = new Rectangle(padding, 144 - padding - size, size, size);
+
+            // Soft dark backdrop, rounded so it reads as a button-like chip.
+            using (var path = RoundedRect(badgeRect, 8))
+            using (var bgBrush = new SolidBrush(Color.FromArgb(170, 0, 0, 0)))
+            {
+                g.FillPath(bgBrush, path);
+            }
+
+            // White glyph centred inside the chip.
+            using (var font = new Font("Segoe MDL2 Assets", 20, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (var brush = new SolidBrush(Color.FromArgb(245, 255, 255, 255)))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                g.DrawString(glyph, font, brush, badgeRect, sf);
+            }
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle r, int radius)
+        {
+            int d = radius * 2;
+            var path = new GraphicsPath();
+            path.AddArc(r.Left, r.Top, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private static async Task ExecuteActionAsync(KeyAction action)
