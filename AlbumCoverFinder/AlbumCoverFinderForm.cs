@@ -94,7 +94,7 @@ namespace AlbumCoverFinder
             nCoversWide.Value = Math.Max(nCoversWide.Minimum, Math.Min(nCoversWide.Maximum, settings.CoversWide));
             // Settings store milliseconds; the UI uses seconds for the user-facing values.
             nEffectDurationSec.Value = Math.Max(1, Math.Min(10, settings.TransitionDurationMs / 1000));
-            nGapIntervalSec.Value = Math.Max(2, Math.Min(300, settings.GapBetweenTransitionsMs / 1000));
+            nGapIntervalSec.Value = Math.Max(1, Math.Min(300, settings.GapBetweenTransitionsMs / 1000));
             UpdateEffectDurationEnabled();
         }
 

@@ -32,11 +32,11 @@ namespace AlbumCoverFinder
         public TransitionEffect Effect { get; set; } = TransitionEffect.Merge;
 
         // Duration of that transition in ms. Ignored when Effect = Blink. Clamped to [1000, 10000].
-        public int TransitionDurationMs { get; set; } = 1500;
+        public int TransitionDurationMs { get; set; } = 3000;
 
-        // Quiet gap between transitions in ms. Minimum 2000.
+        // Quiet gap between transitions in ms. Minimum 1000.
         // Total cycle for a tile swap = GapBetweenTransitionsMs + (Effect == Blink ? 0 : TransitionDurationMs).
-        public int GapBetweenTransitionsMs { get; set; } = 2000;
+        public int GapBetweenTransitionsMs { get; set; } = 1000;
 
         // Legacy swap interval kept for backward compat with older builds that wrote it.
         // The screensaver now derives its timer interval from Gap + Transition.
@@ -71,8 +71,8 @@ namespace AlbumCoverFinder
                         s.SwapIntervalMs = Math.Max(100, ReadInt(key, "SwapIntervalMs", 1000));
                         s.CoversWide = Math.Max(0, ReadInt(key, "CoversWide", 0));
                         s.Effect = (TransitionEffect)Math.Max(0, Math.Min(3, ReadInt(key, "TransitionEffect", (int)TransitionEffect.Merge)));
-                        s.TransitionDurationMs = Math.Max(1000, Math.Min(10000, ReadInt(key, "TransitionDurationMs", 1500)));
-                        s.GapBetweenTransitionsMs = Math.Max(2000, ReadInt(key, "GapBetweenTransitionsMs", 2000));
+                        s.TransitionDurationMs = Math.Max(1000, Math.Min(10000, ReadInt(key, "TransitionDurationMs", 3000)));
+                        s.GapBetweenTransitionsMs = Math.Max(1000, ReadInt(key, "GapBetweenTransitionsMs", 1000));
                         s.WallpaperEnabled = ReadBool(key, "WallpaperEnabled", true);
                         s.WallpaperIntervalMinutes = Math.Max(1, ReadInt(key, "WallpaperIntervalMinutes", 5));
                         s.LockScreenEnabled = ReadBool(key, "LockScreenEnabled", false);

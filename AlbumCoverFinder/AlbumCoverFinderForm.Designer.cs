@@ -368,7 +368,7 @@ namespace AlbumCoverFinder
             this.nEffectDurationSec.Location = new System.Drawing.Point(130, 117);
             this.nEffectDurationSec.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             this.nEffectDurationSec.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
-            this.nEffectDurationSec.Value = new decimal(new int[] { 2, 0, 0, 0 });
+            this.nEffectDurationSec.Value = new decimal(new int[] { 3, 0, 0, 0 });
             this.nEffectDurationSec.Size = new System.Drawing.Size(50, 20);
             this.nEffectDurationSec.Name = "nEffectDurationSec";
 
@@ -381,15 +381,15 @@ namespace AlbumCoverFinder
             this.lGapInterval.Text = "Gap between transitions:";
 
             this.nGapIntervalSec.Location = new System.Drawing.Point(155, 152);
-            this.nGapIntervalSec.Minimum = new decimal(new int[] { 2, 0, 0, 0 });
+            this.nGapIntervalSec.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             this.nGapIntervalSec.Maximum = new decimal(new int[] { 300, 0, 0, 0 });
-            this.nGapIntervalSec.Value = new decimal(new int[] { 2, 0, 0, 0 });
+            this.nGapIntervalSec.Value = new decimal(new int[] { 1, 0, 0, 0 });
             this.nGapIntervalSec.Size = new System.Drawing.Size(50, 20);
             this.nGapIntervalSec.Name = "nGapIntervalSec";
 
             this.lGapIntervalUnit.AutoSize = true;
             this.lGapIntervalUnit.Location = new System.Drawing.Point(210, 155);
-            this.lGapIntervalUnit.Text = "seconds (min 2)";
+            this.lGapIntervalUnit.Text = "seconds (min 1)";
 
             this.bSaveDisplay.Location = new System.Drawing.Point(10, 190);
             this.bSaveDisplay.Size = new System.Drawing.Size(355, 30);
@@ -400,7 +400,7 @@ namespace AlbumCoverFinder
             this.lDisplayHint.Location = new System.Drawing.Point(10, 230);
             this.lDisplayHint.Size = new System.Drawing.Size(355, 80);
             this.lDisplayHint.ForeColor = System.Drawing.Color.DimGray;
-            this.lDisplayHint.Text = "Effective interval per swap = gap + transition. Example: gap 2 s + transition 5 s = 7 s between covers. Changes take effect on next screensaver launch.";
+            this.lDisplayHint.Text = "Effective interval per swap = gap + transition. Example: gap 1 s + transition 3 s = 4 s between covers. Changes take effect on next screensaver launch.";
 
             //
             // tabWallpaper
