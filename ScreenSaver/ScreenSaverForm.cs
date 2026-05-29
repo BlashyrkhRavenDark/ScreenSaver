@@ -173,26 +173,50 @@ namespace ScreenSaver
 
         private async void ScreenSaverForm_Load(object sender, EventArgs e)
         {
-            LoadSettings();
-            ApplyFilterFromRegistry();
-            if (!m_bPreviewMode)
-                Cursor.Hide();
-            TopMost = !m_bPreviewMode;
-            KeyPreview = true; // ensure Escape/any-key reaches the form even if a child has focus
-            InitiatePictureBoxes();
-            BuildFocalOverlay();
-            BuildManageOverlay();
-            moveTimer.Interval = ComputeSwapPeriodMs();
-            moveTimer.Tick += new EventHandler(moveTimer_Tick);
-            moveTimer.Start();
-
-            if (m_oNowPlaying != null)
+            try
             {
-                m_oNowPlaying.Updated += OnNowPlayingUpdated;
-                m_oNowPlaying.Cleared += OnNowPlayingCleared;
-                try { await m_oNowPlaying.StartAsync(); } catch { }
-                if (m_oNowPlaying.Current != null)
-                    OnNowPlayingUpdated(m_oNowPlaying.Current);
+                DiagLog.Write("Form_Load start, preview=" + m_bPreviewMode + " bounds=" + this.Bounds);
+                LoadSettings();
+                DiagLog.Write("  settings: effect=" + m_oEffect + " trans=" + m_iTransitionDurationMs + " gap=" + m_iGapBetweenTransitionsMs + " coversWide=" + m_iCoversWide);
+                ApplyFilterFromRegistry();
+                if (!m_bPreviewMode) Cursor.Hide();
+                TopMost = !m_bPreviewMode;
+                KeyPreview = true;
+                DiagLog.Write("  calling InitiatePictureBoxes, grid=" + m_iXCovers + "x" + m_iYCovers + " tile=" + m_iTilePx);
+                InitiatePictureBoxes();
+                DiagLog.Write("  InitiatePictureBoxes OK, Controls.Count=" + this.Controls.Count);
+                BuildFocalOverlay();
+                BuildManageOverlay();
+                moveTimer.Interval = ComputeSwapPeriodMs();
+                moveTimer.Tick += new EventHandler(moveTimer_Tick);
+                moveTimer.Start();
+                DiagLog.Write("  moveTimer started, interval=" + moveTimer.Interval + "ms");
+
+                if (m_oNowPlaying != null)
+                {
+                    m_oNowPlaying.Updated += OnNowPlayingUpdated;
+                    m_oNowPlaying.Cleared += OnNowPlayingCleared;
+                    try { await m_oNowPlaying.StartAsync(); }
+                    catch (Exception ex) { DiagLog.WriteError("  NowPlayingMonitor.StartAsync", ex); }
+                    if (m_oNowPlaying.Current != null)
+                        OnNowPlayingUpdated(m_oNowPlaying.Current);
+                }
+                DiagLog.Write("Form_Load complete, Visible=" + Visible + " Handle=" + Handle + " IsHandleCreated=" + IsHandleCreated + " ClientSize=" + ClientSize + " Bounds=" + Bounds);
+                // Also log the first tile's actual state on screen so we can see
+                // if it's being positioned/sized correctly.
+                if (m_aPictureBoxes != null && m_iXCovers > 0 && m_iYCovers > 0)
+                {
+                    var t0 = m_aPictureBoxes[0, 0];
+                    if (t0 != null)
+                        DiagLog.Write("  tile[0,0]: Visible=" + t0.Visible + " Bounds=" + t0.Bounds + " HandleCreated=" + t0.IsHandleCreated + " Parent=" + (t0.Parent != null) + " ImageNull=" + (t0.Image == null));
+                    var tLast = m_aPictureBoxes[m_iXCovers - 1, m_iYCovers - 1];
+                    if (tLast != null)
+                        DiagLog.Write("  tile[last]: Bounds=" + tLast.Bounds + " HandleCreated=" + tLast.IsHandleCreated);
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagLog.WriteError("Form_Load exception", ex);
             }
         }
 
@@ -225,8 +249,11 @@ namespace ScreenSaver
             return Math.Max(100, m_iGapBetweenTransitionsMs + transitionMs);
         }
 
+        private int m_iTickCounter;
         private void moveTimer_Tick(object sender, EventArgs e)
         {
+            m_iTickCounter++;
+            if (m_iTickCounter <= 6) DiagLog.Write("moveTimer_Tick #" + m_iTickCounter + " pinned=" + m_bPinned + " manage=" + m_bManageMode);
             ChangePicture();
         }
 
@@ -259,11 +286,6 @@ namespace ScreenSaver
         #region Mosaic
         private void InitiatePictureBoxes()
         {
-            // SuspendLayout + bulk AddRange + ResumeLayout collapses N layout passes
-            // into one. With 50+ tiles this cuts ~hundreds of ms off the cold start
-            // (which is the black-screen gap right after Windows launches the .scr).
-            this.SuspendLayout();
-            var allTiles = new System.Collections.Generic.List<Control>(m_iXCovers * m_iYCovers);
             HashSet<string> oUsed = new HashSet<string>();
             for (int iCptX = 0; iCptX < m_iXCovers; iCptX++)
                 for (int iCptY = 0; iCptY < m_iYCovers; iCptY++)
@@ -285,16 +307,14 @@ namespace ScreenSaver
                     m_aTileKeys[iCptX, iCptY] = entry.Key;
                     if (!string.IsNullOrEmpty(entry.Key))
                         oUsed.Add(entry.Key);
-                    allTiles.Add(pb);
+                    this.Controls.Add(pb);
                 }
-            this.Controls.AddRange(allTiles.ToArray());
-            this.ResumeLayout(performLayout: false);
         }
 
         private void ChangePicture()
         {
-            if (m_iXCovers <= 0 || m_iYCovers <= 0) return;
-            if (m_bPinned) return; // freeze swaps while a tile is pinned
+            if (m_iXCovers <= 0 || m_iYCovers <= 0) { if (m_iTickCounter <= 6) DiagLog.Write("ChangePicture skipped: no grid"); return; }
+            if (m_bPinned) { if (m_iTickCounter <= 6) DiagLog.Write("ChangePicture skipped: pinned"); return; }
 
             int iX = s_oRand.Next(m_iXCovers);
             int iY = s_oRand.Next(m_iYCovers);
@@ -309,6 +329,7 @@ namespace ScreenSaver
                 }
 
             var entry = m_oCoverMgr.GetRandomEntry(oOnScreen);
+            if (m_iTickCounter <= 6) DiagLog.Write("ChangePicture tick #" + m_iTickCounter + " at (" + iX + "," + iY + ") newKey='" + entry.Key + "' newImgNull=" + (entry.Value == null));
             m_aPictureBoxes[iX, iY].Image = entry.Value;
             m_aTileKeys[iX, iY] = entry.Key;
 

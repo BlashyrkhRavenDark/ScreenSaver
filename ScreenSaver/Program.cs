@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using AlbumCoverFinder;
 
@@ -10,46 +11,95 @@ namespace ScreenSaver
         /// The main entry point for the application.
         /// Parses arguments and launches relevant section of the program.
         /// </summary>
+        // PerMonitorAwareV2 - forces Windows to give us raw pixel coordinates on
+        // screens with display scaling, instead of the scaled "logical" pixels.
+        // Without this, a 4K monitor at 150% scaling reports as 2560x1440 to us.
+        private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
+        [DllImport("user32.dll")] private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+        [DllImport("user32.dll")] private static extern IntPtr GetThreadDpiAwarenessContext();
+        [DllImport("user32.dll")] private static extern int GetAwarenessFromDpiAwarenessContext(IntPtr value);
+
         [STAThread]
         static void Main(string[] p_aArgs)
         {
+            // Force PerMonitorV2 before WinForms initializes. Even with the csproj
+            // ApplicationHighDpiMode set, picker-launched screensavers sometimes
+            // ignore the manifest. P/Invoke wins.
+            try { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2); }
+            catch { /* best effort */ }
+
+            // Log everything to a file so we can post-mortem any "black screen"
+            // black-box failure - WinExe has no console, no event log entry on
+            // a silent exit, and screensavers vanish before the user can react.
+            DiagLog.Init();
+            try
+            {
+                IntPtr ctx = GetThreadDpiAwarenessContext();
+                int awareness = GetAwarenessFromDpiAwarenessContext(ctx);
+                DiagLog.Write("DPI awareness = " + awareness + " (0=Unaware, 1=System, 2=PerMonitor, 3=PerMonitorV2, 4=UnawareGdiScaled)");
+            }
+            catch { }
+            DiagLog.Write("Main started. args=[" + string.Join(", ", p_aArgs) + "]");
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => DiagLog.WriteError("UnhandledException", e.ExceptionObject as Exception);
+            Application.ThreadException += (s, e) => DiagLog.WriteError("Application.ThreadException", e.Exception);
+
             string sFirstArg = string.Empty;
             string sSecondArg = null;
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-
-            AlbumCoverMgr oCoverMgr = new AlbumCoverMgr();
-            NowPlayingMonitor oNowPlaying = new NowPlayingMonitor(oCoverMgr.GetPictureByKey);
-
-            ParseCommandLineArgs(ref sFirstArg, ref sSecondArg, p_aArgs);
-
-            if (sFirstArg == string.Empty || sFirstArg == "/c")
+            try
             {
-                Application.Run(new AlbumCoverFinderForm());
-            }
-            else if (sFirstArg == "/p")
-            {
-                if (sSecondArg == null)
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+
+                DiagLog.Write("Creating AlbumCoverMgr");
+                AlbumCoverMgr oCoverMgr = new AlbumCoverMgr();
+                DiagLog.Write("AlbumCoverMgr ready, " + oCoverMgr.GetAlbumTotal() + " covers in cache");
+
+                DiagLog.Write("Creating NowPlayingMonitor");
+                NowPlayingMonitor oNowPlaying = new NowPlayingMonitor(oCoverMgr.GetPictureByKey);
+
+                ParseCommandLineArgs(ref sFirstArg, ref sSecondArg, p_aArgs);
+                DiagLog.Write("Parsed args: first='" + sFirstArg + "' second='" + (sSecondArg ?? "null") + "'");
+
+                if (sFirstArg == string.Empty || sFirstArg == "/c")
                 {
-                    MessageBox.Show("Sorry, but the expected window handle was not provided.",
-                        "ScreenSaver", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                    return;
+                    DiagLog.Write("Branch /c: opening AlbumCoverFinderForm");
+                    Application.Run(new AlbumCoverFinderForm());
                 }
-                IntPtr previewWndHandle = new IntPtr(long.Parse(sSecondArg));
-                Application.Run(new ScreenSaverForm(previewWndHandle, oCoverMgr, oNowPlaying));
+                else if (sFirstArg == "/p")
+                {
+                    if (sSecondArg == null)
+                    {
+                        DiagLog.Write("Branch /p: no hwnd provided");
+                        MessageBox.Show("Sorry, but the expected window handle was not provided.",
+                            "ScreenSaver", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                        return;
+                    }
+                    IntPtr previewWndHandle = new IntPtr(long.Parse(sSecondArg));
+                    DiagLog.Write("Branch /p: hwnd=" + previewWndHandle);
+                    Application.Run(new ScreenSaverForm(previewWndHandle, oCoverMgr, oNowPlaying));
+                }
+                else if (sFirstArg == "/s")
+                {
+                    DiagLog.Write("Branch /s: enumerating screens");
+                    ShowScreenSaver(oCoverMgr, oNowPlaying);
+                    DiagLog.Write("All screensaver forms shown; entering Application.Run");
+                    Application.Run();
+                    DiagLog.Write("Application.Run returned");
+                }
+                else
+                {
+                    DiagLog.Write("Branch unknown arg: " + sFirstArg);
+                    MessageBox.Show("Sorry, but the command line argument \"" + sFirstArg +
+                        "\" is not valid.", "ScreenSaver",
+                        MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                }
             }
-            else if (sFirstArg == "/s")
+            catch (Exception ex)
             {
-                ShowScreenSaver(oCoverMgr, oNowPlaying);
-                Application.Run();
+                DiagLog.WriteError("Main caught", ex);
             }
-            else
-            {
-                MessageBox.Show("Sorry, but the command line argument \"" + sFirstArg +
-                    "\" is not valid.", "ScreenSaver",
-                    MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-            }
+            DiagLog.Write("Main returning");
         }
 
         /// <summary>
@@ -59,10 +109,22 @@ namespace ScreenSaver
         /// </summary>
         static void ShowScreenSaver(AlbumCoverMgr p_oCoverMgr, NowPlayingMonitor p_oNowPlaying)
         {
+            int idx = 0;
             foreach (Screen oScreen in Screen.AllScreens)
             {
-                ScreenSaverForm oScreensaver = new ScreenSaverForm(oScreen.Bounds, p_oCoverMgr, p_oNowPlaying);
-                oScreensaver.Show();
+                DiagLog.Write("  screen[" + idx + "] bounds=" + oScreen.Bounds + " primary=" + oScreen.Primary);
+                try
+                {
+                    ScreenSaverForm oScreensaver = new ScreenSaverForm(oScreen.Bounds, p_oCoverMgr, p_oNowPlaying);
+                    DiagLog.Write("  screen[" + idx + "] form ctor OK, calling Show()");
+                    oScreensaver.Show();
+                    DiagLog.Write("  screen[" + idx + "] Show() returned; Visible=" + oScreensaver.Visible + " Handle=" + oScreensaver.Handle);
+                }
+                catch (Exception ex)
+                {
+                    DiagLog.WriteError("  screen[" + idx + "] failed", ex);
+                }
+                idx++;
             }
         }
 

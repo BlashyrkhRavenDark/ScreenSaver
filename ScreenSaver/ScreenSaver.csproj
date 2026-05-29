@@ -18,17 +18,9 @@
     <BaseOutputPath>..\out\$(MSBuildProjectName)\bin\</BaseOutputPath>
     <BaseIntermediateOutputPath>..\out\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
 
-    <!--
-      ReadyToRun: ahead-of-time compiles IL to native code at publish, so the
-      cold start doesn't pay the JIT cost on every type used during launch.
-      Trades a larger publish folder for several seconds of black-screen delay
-      gone when the screensaver kicks in. Requires PublishReadyToRunComposite=false
-      so we don't end up bundling everything in one big native image.
-    -->
-    <PublishReadyToRun>true</PublishReadyToRun>
-    <PublishReadyToRunComposite>false</PublishReadyToRunComposite>
-    <!-- R2R needs an explicit RID. Stays framework-dependent (SelfContained=false)
-         so the published folder is still ~10 MB instead of ~80 MB. -->
+    <!-- ReadyToRun was tried here but caused a black-screen-on-launch issue we
+         couldn't pin down quickly; reverted. Cold start is ~1-2 s slower without
+         it but functionally correct. Reinstate only with careful testing. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>

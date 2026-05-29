@@ -64,6 +64,7 @@ namespace ScreenSaver
         {
             DoubleBuffered = true;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+            BackColor = Color.Black;
             m_oFadeTimer = new Timer { Interval = 16 };
             m_oFadeTimer.Tick += OnFadeTick;
         }
@@ -117,6 +118,7 @@ namespace ScreenSaver
             Invalidate();
         }
 
+        private static int s_iPaintLogCount;
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -126,6 +128,12 @@ namespace ScreenSaver
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
 
             Rectangle dest = ClientRectangle;
+
+            if (s_iPaintLogCount < 5)
+            {
+                s_iPaintLogCount++;
+                DiagLog.Write("FadingPictureBox.OnPaint #" + s_iPaintLogCount + " Effect=" + Effect + " currentNull=" + (m_oCurrent == null) + " prevNull=" + (m_oPrev == null) + " fading=" + m_bFading + " dest=" + dest);
+            }
 
             float t = 1f;
             if (m_bFading && TransitionDurationMs > 0)
