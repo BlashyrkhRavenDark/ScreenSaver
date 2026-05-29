@@ -30,7 +30,7 @@ namespace AlbumCoverFinder
         public int CoversWide { get; set; } = 12;
 
         // Visual transition effect played when a tile's cover is swapped.
-        public TransitionEffect Effect { get; set; } = TransitionEffect.Merge;
+        public TransitionEffect Effect { get; set; } = TransitionEffect.Flip;
 
         // Duration of that transition in ms. Ignored when Effect = Blink. Clamped to [1000, 10000].
         public int TransitionDurationMs { get; set; } = 3000;
@@ -71,7 +71,7 @@ namespace AlbumCoverFinder
                         s.AlbumCap = ReadInt(key, "AlbumCap", 0);
                         s.SwapIntervalMs = Math.Max(100, ReadInt(key, "SwapIntervalMs", 1000));
                         s.CoversWide = Math.Max(0, ReadInt(key, "CoversWide", 12));
-                        s.Effect = (TransitionEffect)Math.Max(0, Math.Min(3, ReadInt(key, "TransitionEffect", (int)TransitionEffect.Merge)));
+                        s.Effect = (TransitionEffect)Math.Max(0, Math.Min(3, ReadInt(key, "TransitionEffect", (int)TransitionEffect.Flip)));
                         s.TransitionDurationMs = Math.Max(1000, Math.Min(10000, ReadInt(key, "TransitionDurationMs", 3000)));
                         s.GapBetweenTransitionsMs = Math.Max(1000, ReadInt(key, "GapBetweenTransitionsMs", 1000));
                         s.WallpaperEnabled = ReadBool(key, "WallpaperEnabled", false);
