@@ -325,8 +325,20 @@ namespace ScreenSaver
 
             try
             {
-                // iTunes PlayerState: 0=stopped, 1=playing, 2=paused, 3=ff, 4=rew
+                // iTunes PlayerState: 0=stopped, 1=playing, 2=paused, 3=ff, 4=rew.
+                // Distinct handling:
+                //   1 (playing)   -> normal flow below, may refresh on track change
+                //   2 (paused)    -> KEEP the last cover visible; just stop polling
+                //                    for changes. Resumes if playback resumes.
+                //   anything else -> stopped (or session over) -> clear the file
+                //                    so subscribers go idle.
                 int playerState = (int)m_oItunes.PlayerState;
+                if (playerState == 2)
+                {
+                    // Paused. Don't touch nowplaying.{json,png} - they keep showing
+                    // the last track on the Stream Deck and the screensaver focal tile.
+                    return;
+                }
                 if (playerState != 1)
                 {
                     if (m_iLastItunesTrackId != -1)
