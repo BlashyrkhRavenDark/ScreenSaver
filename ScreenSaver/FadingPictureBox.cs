@@ -1,17 +1,21 @@
 using System;
-using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Windows.Forms;
 using AlbumCoverFinder;
 
 namespace ScreenSaver
 {
     /// <summary>
-    /// Custom-painted PictureBox replacement that animates between the previous
-    /// and current image using one of several transition effects. The effect and
-    /// duration are per-instance so the focal tile and mosaic tiles can use
-    /// different speeds.
+    /// A non-control tile renderer that animates between a previous and current
+    /// image using one of several transition effects, plus an optional pulsing
+    /// highlight border.
+    ///
+    /// IMPORTANT - why this is NOT a Control: on this machine's .NET 10 runtime,
+    /// child controls of the screensaver form never composite to the screen (the
+    /// form paints, the children do not - verified on-screen with every control
+    /// type, DPI mode, and window style). So the mosaic is owner-drawn: the form
+    /// holds an array of these tiles and calls <see cref="Paint"/> for each one in
+    /// its own OnPaint. The form composites reliably; children never did.
     ///
     /// Effects:
     ///   Blink       - no animation, instant swap
@@ -19,122 +23,71 @@ namespace ScreenSaver
     ///   Merge       - per-pixel color blend (alpha lerp) old -> new
     ///   Flip        - horizontal compress to 0 then back, swapping image at midpoint
     /// </summary>
-    public class FadingPictureBox : Control
+    public class FadingTile
     {
         private Image m_oPrev;
         private Image m_oCurrent;
         private int m_iFadeStartTick;
         private bool m_bFading;
-        private readonly Timer m_oFadeTimer;
 
-        [Browsable(false)]
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int TransitionDurationMs { get; set; } = 1500;
-
-        [Browsable(false)]
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public TransitionEffect Effect { get; set; } = TransitionEffect.Merge;
 
         private bool m_bHighlighted;
-        private Color m_oHighlightColor = Color.FromArgb(255, 230, 90);
+        public Color HighlightColor { get; set; } = Color.FromArgb(255, 230, 90);
 
-        [Browsable(false)]
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool Highlighted
         {
             get { return m_bHighlighted; }
-            set
+            set { m_bHighlighted = value; }
+        }
+
+        /// <summary>The current (settled) image. Null until first set.</summary>
+        public Image Current { get { return m_oCurrent; } }
+
+        /// <summary>True while a transition is in progress or a highlight is pulsing -
+        /// i.e. the form needs to keep repainting this tile.</summary>
+        public bool Animating { get { return m_bFading || m_bHighlighted; } }
+
+        /// <summary>Start a transition to a new image (or instant swap for Blink/first set).</summary>
+        public void SetImage(Image img)
+        {
+            if (ReferenceEquals(m_oCurrent, img)) return;
+            m_oPrev = m_oCurrent;
+            m_oCurrent = img;
+
+            if (Effect == TransitionEffect.Blink || m_oPrev == null)
             {
-                if (m_bHighlighted == value) return;
-                m_bHighlighted = value;
-                if (m_bHighlighted) m_oFadeTimer.Start();
-                Invalidate();
+                m_bFading = false;
+                return;
             }
+            m_iFadeStartTick = Environment.TickCount;
+            m_bFading = true;
         }
 
-        [Browsable(false)]
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Color HighlightColor
-        {
-            get { return m_oHighlightColor; }
-            set { m_oHighlightColor = value; if (m_bHighlighted) Invalidate(); }
-        }
-
-        public FadingPictureBox()
-        {
-            DoubleBuffered = true;
-            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
-            BackColor = Color.Black;
-            m_oFadeTimer = new Timer { Interval = 16 };
-            m_oFadeTimer.Tick += OnFadeTick;
-        }
-
-        [Browsable(false)]
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Image Image
-        {
-            get { return m_oCurrent; }
-            set
-            {
-                if (ReferenceEquals(m_oCurrent, value)) return;
-                m_oPrev = m_oCurrent;
-                m_oCurrent = value;
-
-                if (Effect == TransitionEffect.Blink || m_oPrev == null || !IsHandleCreated)
-                {
-                    // Blink mode or initial set: no transition, just swap.
-                    m_bFading = false;
-                    Invalidate();
-                    return;
-                }
-
-                m_iFadeStartTick = Environment.TickCount;
-                m_bFading = true;
-                m_oFadeTimer.Start();
-                Invalidate();
-            }
-        }
-
-        /// <summary>
-        /// Sets the image instantly with no transition - used to seed initial tiles.
-        /// </summary>
+        /// <summary>Set the image instantly with no transition - used to seed tiles.</summary>
         public void SetImageImmediate(Image img)
         {
             m_oPrev = null;
             m_oCurrent = img;
             m_bFading = false;
-            Invalidate();
         }
 
-        private void OnFadeTick(object sender, EventArgs e)
+        /// <summary>Advance the transition clock; clears the fade once complete.
+        /// Called once per animation frame by the form.</summary>
+        public void Advance()
         {
-            int elapsed = Environment.TickCount - m_iFadeStartTick;
-            if (elapsed >= TransitionDurationMs)
+            if (m_bFading && Environment.TickCount - m_iFadeStartTick >= TransitionDurationMs)
             {
                 m_bFading = false;
                 m_oPrev = null;
-                if (!m_bHighlighted) m_oFadeTimer.Stop();
             }
-            Invalidate();
         }
 
-        private static int s_iPaintLogCount;
-        protected override void OnPaint(PaintEventArgs e)
+        /// <summary>Draw the current frame into <paramref name="dest"/> on the supplied
+        /// Graphics. The caller is responsible for setting interpolation/smoothing.</summary>
+        public void Paint(Graphics g, Rectangle dest)
         {
-            base.OnPaint(e);
-
-            var g = e.Graphics;
-            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-
-            Rectangle dest = ClientRectangle;
-
-            if (s_iPaintLogCount < 5)
-            {
-                s_iPaintLogCount++;
-                DiagLog.Write("FadingPictureBox.OnPaint #" + s_iPaintLogCount + " Effect=" + Effect + " currentNull=" + (m_oCurrent == null) + " prevNull=" + (m_oPrev == null) + " fading=" + m_bFading + " dest=" + dest);
-            }
-
             float t = 1f;
             if (m_bFading && TransitionDurationMs > 0)
             {
@@ -147,28 +100,23 @@ namespace ScreenSaver
                 case TransitionEffect.Blink:
                     if (m_oCurrent != null) g.DrawImage(m_oCurrent, dest);
                     break;
-
                 case TransitionEffect.Merge:
                     PaintMerge(g, dest, t);
                     break;
-
                 case TransitionEffect.FadeToBlack:
                     PaintFadeToBlack(g, dest, t);
                     break;
-
                 case TransitionEffect.Flip:
                     PaintFlip(g, dest, t);
                     break;
             }
 
             if (m_bHighlighted)
-                DrawHighlightBorder(g);
+                DrawHighlightBorder(g, dest);
         }
 
         private void PaintMerge(Graphics g, Rectangle dest, float t)
         {
-            // Per-pixel alpha lerp: equivalent to "compute color difference and gradually
-            // adjust" - that's exactly what alpha blending two RGB layers does.
             // Ease out for a gentler arrival.
             float teased = 1f - (1f - t) * (1f - t) * (1f - t);
             if (m_bFading && m_oPrev != null)
@@ -187,25 +135,16 @@ namespace ScreenSaver
                 if (m_oCurrent != null) g.DrawImage(m_oCurrent, dest);
                 return;
             }
-            // Black background fills the dest while either image is partially transparent.
             using (var brush = new SolidBrush(Color.Black)) g.FillRectangle(brush, dest);
             if (t < 0.5f)
             {
-                // Old fades out: alpha 1 -> 0 over the first half.
                 if (m_oPrev != null)
-                {
-                    float alpha = 1f - (t * 2f);
-                    DrawImageWithAlpha(g, m_oPrev, dest, alpha);
-                }
+                    DrawImageWithAlpha(g, m_oPrev, dest, 1f - (t * 2f));
             }
             else
             {
-                // New fades in: alpha 0 -> 1 over the second half.
                 if (m_oCurrent != null)
-                {
-                    float alpha = (t - 0.5f) * 2f;
-                    DrawImageWithAlpha(g, m_oCurrent, dest, alpha);
-                }
+                    DrawImageWithAlpha(g, m_oCurrent, dest, (t - 0.5f) * 2f);
             }
         }
 
@@ -216,9 +155,6 @@ namespace ScreenSaver
                 if (m_oCurrent != null) g.DrawImage(m_oCurrent, dest);
                 return;
             }
-            // Horizontal accordion: scaleX = |2t - 1|. 1 at t=0, 0 at t=0.5, 1 at t=1.
-            // First half shows the old image shrinking; second half shows the new image expanding.
-            // The black background hides the tile while the image is edge-on.
             using (var brush = new SolidBrush(Color.Black)) g.FillRectangle(brush, dest);
 
             float scaleX = Math.Abs(2f * t - 1f);
@@ -246,32 +182,20 @@ namespace ScreenSaver
             }
         }
 
-        private void DrawHighlightBorder(Graphics g)
+        private void DrawHighlightBorder(Graphics g, Rectangle dest)
         {
             float phase = (Environment.TickCount % 1400) / 1400f;
             float alphaF = 0.55f + 0.45f * (float)Math.Sin(phase * Math.PI * 2);
             int alpha = Math.Max(0, Math.Min(255, (int)(alphaF * 255)));
-            Color borderColor = Color.FromArgb(alpha, m_oHighlightColor);
+            Color borderColor = Color.FromArgb(alpha, HighlightColor);
 
-            int thickness = Math.Max(3, ClientSize.Width / 32);
-            using (var pen = new System.Drawing.Pen(borderColor, thickness))
+            int thickness = Math.Max(3, dest.Width / 32);
+            using (var pen = new Pen(borderColor, thickness))
             {
                 pen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-                var r = new Rectangle(0, 0, ClientSize.Width - 1, ClientSize.Height - 1);
+                var r = new Rectangle(dest.X, dest.Y, dest.Width - 1, dest.Height - 1);
                 g.DrawRectangle(pen, r);
             }
-            if (!m_bFading && m_bHighlighted && !m_oFadeTimer.Enabled)
-                m_oFadeTimer.Start();
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                m_oFadeTimer.Stop();
-                m_oFadeTimer.Dispose();
-            }
-            base.Dispose(disposing);
         }
     }
 }

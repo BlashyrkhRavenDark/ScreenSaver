@@ -1,18 +1,26 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
-using Microsoft.Win32;
 using AlbumCoverFinder;
 
 namespace ScreenSaver
 {
     /// <summary>
     /// The visual surface of the screensaver - one Form per monitor.
-    /// Builds a centered mosaic of square tiles, swaps one tile per second with a
-    /// crossfade animation, and overlays a focal "Now Playing" tile whenever the
-    /// Windows SMTC reports an active media session.
+    ///
+    /// RENDERING: the whole UI is owner-drawn in <see cref="OnPaint"/> into a manual
+    /// back-buffer that is then blitted in one go. We do NOT use child controls for
+    /// the tiles/overlay, because on this machine's .NET 10 runtime child controls of
+    /// this form never composite to the screen (the form paints, the children do not -
+    /// verified on-screen across every control type, DPI mode, and window style). The
+    /// form's own surface renders reliably, so everything lives there.
+    ///
+    /// Builds a mosaic of square tiles, swaps one tile per cadence with a transition,
+    /// and overlays a focal "Now Playing" tile + captions whenever the Windows SMTC
+    /// reports an active media session.
     /// </summary>
     public partial class ScreenSaverForm : Form
     {
@@ -43,11 +51,15 @@ namespace ScreenSaver
         private int m_iTilePx = 256;
         private int m_iOffsetX = 0;
         private int m_iOffsetY = 0;
-        private FadingPictureBox[,] m_aPictureBoxes;
+        private FadingTile[,] m_aTiles;
         private string[,] m_aTileKeys;
         private AlbumCoverMgr m_oCoverMgr;
         private NowPlayingMonitor m_oNowPlaying;
         private string m_sCurrentPlayingKey;
+
+        // Owner-draw back-buffer + animation clock.
+        private Bitmap m_oBackBuffer;
+        private System.Windows.Forms.Timer m_oAnimTimer;
 
         // Display settings (live in the registry; loaded in LoadSettings).
         private int m_iCoversWide;                              // 0 = native (use DEFAULT_TARGET_TILE_PX)
@@ -55,29 +67,25 @@ namespace ScreenSaver
         private int m_iTransitionDurationMs = 1500;
         private int m_iGapBetweenTransitionsMs = 2000;
 
-        // Focal "Now Playing" overlay (#11 + #8)
-        private FadingPictureBox m_oFocalBox;
-        private FadingPictureBox m_oSiblingBox;
-        private Label m_oFocalCaption;
-        private Label m_oSiblingCaption;
-        private Panel m_oFocalShade;
+        // "Feature" cover: the now-playing (or pinned) album, drawn over the mosaic
+        // as a 2x2-tile cover that flips with the same transition as the rest.
+        // No dimming shade, no caption text.
+        private readonly FadingTile m_oFeatureTile = new FadingTile();
+        private bool m_bFeatureVisible;
 
-        // Click-to-pin overlay (#2). Reuses the focal shade for dimming but has
-        // its own caption text so the metadata reveal is more verbose than the
-        // SMTC focal caption.
+        // Click-to-pin overlay (#2).
         private bool m_bPinned;
         private string m_sPinnedKey;
 
-        // Right-click-to-hide transient toast
-        private Label m_oHiddenToast;
+        // Right-click-to-hide transient toast.
+        private string m_sToastText = string.Empty;
+        private bool m_bToastVisible;
         private System.Windows.Forms.Timer m_oToastTimer;
 
         // Manage mode (cursor visible, swap paused, right-click-to-hide armed).
-        // Triggered by any mouse movement past the exit threshold. Auto-exits after
-        // MANAGE_MODE_TIMEOUT_MS of no input; left-click/key/Esc exit immediately.
         private bool m_bManageMode;
         private System.Windows.Forms.Timer m_oManageTimer;
-        private Label m_oManageHint;
+        private bool m_bManageHintVisible;
         private const int MANAGE_MODE_TIMEOUT_MS = 8000;
 
         #region Constructors
@@ -100,7 +108,6 @@ namespace ScreenSaver
             m_oCoverMgr = pCoverMgr;
             m_oNowPlaying = pNowPlaying;
             InitializeComponent();
-            m_oCoverMgr = pCoverMgr;
             this.Bounds = Bounds;
             LoadSettings();
             ComputeGrid(Bounds, DEFAULT_TARGET_TILE_PX);
@@ -122,8 +129,6 @@ namespace ScreenSaver
             Location = new Point(0, 0);
             m_bPreviewMode = true;
             LoadSettings();
-            // The preview pane is tiny; ignore CoversWide so a "20 covers wide" setting
-            // doesn't produce 20 micro-thumbs in the Windows Settings preview.
             int previousCoversWide = m_iCoversWide;
             m_iCoversWide = 0;
             ComputeGrid(new Rectangle(0, 0, ParentRect.Width, ParentRect.Height), PREVIEW_TARGET_TILE_PX);
@@ -134,12 +139,10 @@ namespace ScreenSaver
         #region Grid sizing
 
         /// <summary>
-        /// Grid layout starts at the top-left corner with no centering. If the
-        /// user picked a column count (<see cref="m_iCoversWide"/>), tile size is
-        /// derived from screen width / columns; otherwise tile size equals the
-        /// native cover resolution (<paramref name="pTargetTilePx"/>) and the
-        /// column count is chosen to cover the screen, allowing the right edge
-        /// and bottom edge to clip a partial tile rather than leaving a black bar.
+        /// Grid layout starts at the top-left corner. If the user picked a column
+        /// count, tile size derives from screen width / columns; otherwise tile size
+        /// is the native cover resolution and the column count covers the screen,
+        /// allowing the right/bottom edge to clip a partial tile.
         /// </summary>
         private void ComputeGrid(Rectangle pBounds, int pTargetTilePx)
         {
@@ -147,16 +150,13 @@ namespace ScreenSaver
             if (m_iCoversWide > 0)
             {
                 iCols = m_iCoversWide;
-                // Integer division: tile fits cleanly across the width.
                 iTile = Math.Max(32, pBounds.Width / iCols);
             }
             else
             {
                 iTile = Math.Max(32, pTargetTilePx);
-                // Ceiling division: cover the full width even if the last column overflows.
                 iCols = (pBounds.Width + iTile - 1) / iTile;
             }
-            // Ceiling division for rows: cover the full height even if the last row clips.
             int iRows = (pBounds.Height + iTile - 1) / iTile;
 
             m_iXCovers = Math.Max(1, iCols);
@@ -164,13 +164,25 @@ namespace ScreenSaver
             m_iTilePx = iTile;
             m_iOffsetX = 0;
             m_iOffsetY = 0;
-            m_aPictureBoxes = new FadingPictureBox[m_iXCovers, m_iYCovers];
+            m_aTiles = new FadingTile[m_iXCovers, m_iYCovers];
             m_aTileKeys = new string[m_iXCovers, m_iYCovers];
+        }
+
+        private Rectangle TileRect(int x, int y)
+        {
+            return new Rectangle(m_iOffsetX + x * m_iTilePx, m_iOffsetY + y * m_iTilePx, m_iTilePx, m_iTilePx);
+        }
+
+        private bool TileAt(Point p, out int x, out int y)
+        {
+            x = (p.X - m_iOffsetX) / m_iTilePx;
+            y = (p.Y - m_iOffsetY) / m_iTilePx;
+            return x >= 0 && y >= 0 && x < m_iXCovers && y < m_iYCovers;
         }
 
         #endregion
 
-        #region Initialisation and other events
+        #region Initialisation
 
         private async void ScreenSaverForm_Load(object sender, EventArgs e)
         {
@@ -178,20 +190,27 @@ namespace ScreenSaver
             {
                 DiagLog.Write("Form_Load start, preview=" + m_bPreviewMode + " bounds=" + this.Bounds);
                 LoadSettings();
-                DiagLog.Write("  settings: effect=" + m_oEffect + " trans=" + m_iTransitionDurationMs + " gap=" + m_iGapBetweenTransitionsMs + " coversWide=" + m_iCoversWide);
                 ApplyFilterFromRegistry();
                 if (!m_bPreviewMode) Cursor.Hide();
                 TopMost = !m_bPreviewMode;
                 KeyPreview = true;
-                DiagLog.Write("  calling InitiatePictureBoxes, grid=" + m_iXCovers + "x" + m_iYCovers + " tile=" + m_iTilePx);
-                InitiatePictureBoxes();
-                DiagLog.Write("  InitiatePictureBoxes OK, Controls.Count=" + this.Controls.Count);
-                BuildFocalOverlay();
-                BuildManageOverlay();
+
+                InitiateTiles();
+                DiagLog.Write("  InitiateTiles OK, grid=" + m_iXCovers + "x" + m_iYCovers + " tile=" + m_iTilePx);
+
+                // The feature cover flips like the mosaic tiles.
+                m_oFeatureTile.Effect = m_oEffect;
+                m_oFeatureTile.TransitionDurationMs = m_iTransitionDurationMs;
+
                 moveTimer.Interval = ComputeSwapPeriodMs();
                 moveTimer.Tick += new EventHandler(moveTimer_Tick);
                 moveTimer.Start();
-                DiagLog.Write("  moveTimer started, interval=" + moveTimer.Interval + "ms");
+
+                // Animation clock: advances transitions / highlight pulses and repaints
+                // only while something is actually animating.
+                m_oAnimTimer = new System.Windows.Forms.Timer { Interval = 33 };
+                m_oAnimTimer.Tick += OnAnimTick;
+                m_oAnimTimer.Start();
 
                 if (m_oNowPlaying != null)
                 {
@@ -202,18 +221,8 @@ namespace ScreenSaver
                     if (m_oNowPlaying.Current != null)
                         OnNowPlayingUpdated(m_oNowPlaying.Current);
                 }
-                DiagLog.Write("Form_Load complete, Visible=" + Visible + " Handle=" + Handle + " IsHandleCreated=" + IsHandleCreated + " ClientSize=" + ClientSize + " Bounds=" + Bounds);
-                // Also log the first tile's actual state on screen so we can see
-                // if it's being positioned/sized correctly.
-                if (m_aPictureBoxes != null && m_iXCovers > 0 && m_iYCovers > 0)
-                {
-                    var t0 = m_aPictureBoxes[0, 0];
-                    if (t0 != null)
-                        DiagLog.Write("  tile[0,0]: Visible=" + t0.Visible + " Bounds=" + t0.Bounds + " HandleCreated=" + t0.IsHandleCreated + " Parent=" + (t0.Parent != null) + " ImageNull=" + (t0.Image == null));
-                    var tLast = m_aPictureBoxes[m_iXCovers - 1, m_iYCovers - 1];
-                    if (tLast != null)
-                        DiagLog.Write("  tile[last]: Bounds=" + tLast.Bounds + " HandleCreated=" + tLast.IsHandleCreated);
-                }
+                DiagLog.Write("Form_Load complete, Visible=" + Visible + " ClientSize=" + ClientSize);
+                Invalidate();
             }
             catch (Exception ex)
             {
@@ -228,7 +237,6 @@ namespace ScreenSaver
             m_oCoverMgr.SetFilter(f.IsEmpty ? null : f);
         }
 
-
         private void LoadSettings()
         {
             var s = ScreensaverSettings.Load();
@@ -239,23 +247,11 @@ namespace ScreenSaver
             if (m_oCoverMgr != null) m_oCoverMgr.SetAlbumCap(s.AlbumCap);
         }
 
-        /// <summary>
-        /// Tile-swap cadence: the quiet gap plus the transition itself (zero for
-        /// Blink because there's no animation). This is what the user actually
-        /// experiences as "time between covers."
-        /// </summary>
+        /// <summary>Tile-swap cadence: quiet gap plus the transition itself (zero for Blink).</summary>
         private int ComputeSwapPeriodMs()
         {
             int transitionMs = m_oEffect == TransitionEffect.Blink ? 0 : m_iTransitionDurationMs;
             return Math.Max(100, m_iGapBetweenTransitionsMs + transitionMs);
-        }
-
-        private int m_iTickCounter;
-        private void moveTimer_Tick(object sender, EventArgs e)
-        {
-            m_iTickCounter++;
-            if (m_iTickCounter <= 6) DiagLog.Write("moveTimer_Tick #" + m_iTickCounter + " pinned=" + m_bPinned + " manage=" + m_bManageMode);
-            ChangePicture();
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
@@ -267,55 +263,144 @@ namespace ScreenSaver
                 m_oNowPlaying.Updated -= OnNowPlayingUpdated;
                 m_oNowPlaying.Cleared -= OnNowPlayingCleared;
             }
-            DisposeAllTileImages();
+            m_oAnimTimer?.Stop();
+            m_oBackBuffer?.Dispose();
+            m_oBackBuffer = null;
             base.OnFormClosed(e);
         }
 
-        private void DisposeAllTileImages()
+        #endregion
+
+        #region Owner-draw rendering
+
+        // The buffer already clears to black, so suppress the background erase
+        // (avoids flicker and a redundant fill).
+        protected override void OnPaintBackground(PaintEventArgs e) { }
+
+        protected override void OnPaint(PaintEventArgs e)
         {
-            if (m_aPictureBoxes == null) return;
-            for (int x = 0; x < m_iXCovers; x++)
-                for (int y = 0; y < m_iYCovers; y++)
-                {
-                    var pb = m_aPictureBoxes[x, y];
-                    if (pb != null)
-                        pb.SetImageImmediate(null);
-                }
+            if (m_aTiles == null) { base.OnPaint(e); return; }
+
+            int w = ClientSize.Width, h = ClientSize.Height;
+            if (w <= 0 || h <= 0) return;
+
+            if (m_oBackBuffer == null || m_oBackBuffer.Width != w || m_oBackBuffer.Height != h)
+            {
+                m_oBackBuffer?.Dispose();
+                m_oBackBuffer = new Bitmap(w, h);
+            }
+
+            using (var g = Graphics.FromImage(m_oBackBuffer))
+            {
+                g.Clear(Color.Black);
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+
+                // Mosaic.
+                for (int x = 0; x < m_iXCovers; x++)
+                    for (int y = 0; y < m_iYCovers; y++)
+                        m_aTiles[x, y]?.Paint(g, TileRect(x, y));
+
+                // Feature cover (now-playing / pinned) drawn over the mosaic as a
+                // 2x2-tile cover. No shade, no text - it just reads as a bigger cover.
+                if (m_bFeatureVisible)
+                    m_oFeatureTile.Paint(g, FeatureRect());
+
+                // Transient text overlays.
+                if (m_bManageHintVisible) PaintManageHint(g);
+                if (m_bToastVisible) PaintToast(g);
+            }
+
+            e.Graphics.DrawImageUnscaled(m_oBackBuffer, 0, 0);
         }
+
+        /// <summary>The centered 2x2-tile block the feature (now-playing/pinned) cover
+        /// occupies, clamped for tiny grids.</summary>
+        private Rectangle FeatureRect()
+        {
+            int bw = Math.Min(2, m_iXCovers);
+            int bh = Math.Min(2, m_iYCovers);
+            int cx = (m_iXCovers - bw) / 2;
+            int cy = (m_iYCovers - bh) / 2;
+            return new Rectangle(m_iOffsetX + cx * m_iTilePx, m_iOffsetY + cy * m_iTilePx,
+                                 bw * m_iTilePx, bh * m_iTilePx);
+        }
+
+        private void PaintManageHint(Graphics g)
+        {
+            int w = ClientSize.Width;
+            int bw = Math.Min(820, w - 80), bh = 44;
+            var r = new Rectangle((w - bw) / 2, 18, bw, bh);
+            using (var bg = new SolidBrush(Color.FromArgb(190, 30, 30, 30)))
+                g.FillRectangle(bg, r);
+            using (var f = new Font("Segoe UI", 13f, FontStyle.Regular))
+            using (var br = new SolidBrush(Color.White))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                g.DrawString("Right-click any cover to hide it    -    Click or press Esc to exit", f, br, r, sf);
+        }
+
+        private void PaintToast(Graphics g)
+        {
+            int w = ClientSize.Width;
+            int bw = Math.Min(640, w - 80), bh = 56;
+            var r = new Rectangle((w - bw) / 2, 32, bw, bh);
+            using (var bg = new SolidBrush(Color.FromArgb(180, 60, 0, 0)))
+                g.FillRectangle(bg, r);
+            using (var f = new Font("Segoe UI", 14f, FontStyle.Bold))
+            using (var br = new SolidBrush(Color.White))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                g.DrawString(m_sToastText, f, br, r, sf);
+        }
+
+        /// <summary>Repaint while anything is animating (fades, highlight pulse).</summary>
+        private void OnAnimTick(object sender, EventArgs e)
+        {
+            bool animating = false;
+            if (m_aTiles != null)
+                foreach (var t in m_aTiles)
+                {
+                    if (t == null) continue;
+                    t.Advance();
+                    if (t.Animating) animating = true;
+                }
+            m_oFeatureTile.Advance();
+            if (m_bFeatureVisible && m_oFeatureTile.Animating) animating = true;
+
+            if (animating) Invalidate();
+        }
+
         #endregion
 
         #region Mosaic
-        private void InitiatePictureBoxes()
+
+        private void InitiateTiles()
         {
             HashSet<string> oUsed = new HashSet<string>();
-            for (int iCptX = 0; iCptX < m_iXCovers; iCptX++)
-                for (int iCptY = 0; iCptY < m_iYCovers; iCptY++)
+            for (int x = 0; x < m_iXCovers; x++)
+                for (int y = 0; y < m_iYCovers; y++)
                 {
-                    int x = iCptX, y = iCptY; // capture for the closure below
-                    var pb = new FadingPictureBox();
-                    pb.Effect = m_oEffect;
-                    pb.TransitionDurationMs = m_iTransitionDurationMs;
+                    var tile = new FadingTile { Effect = m_oEffect, TransitionDurationMs = m_iTransitionDurationMs };
                     var entry = m_oCoverMgr.GetRandomEntry(oUsed);
-                    pb.SetImageImmediate(entry.Value);
-                    pb.Width = m_iTilePx;
-                    pb.Height = m_iTilePx;
-                    pb.Left = m_iOffsetX + iCptX * m_iTilePx;
-                    pb.Top = m_iOffsetY + iCptY * m_iTilePx;
-                    pb.BackColor = Color.Black;
-                    pb.MouseClick += (s, e) => OnTileClicked(x, y, e);
-                    pb.MouseMove += ScreenSaverForm_MouseMove; // mouse movement on tiles should still exit
-                    m_aPictureBoxes[iCptX, iCptY] = pb;
-                    m_aTileKeys[iCptX, iCptY] = entry.Key;
+                    tile.SetImageImmediate(entry.Value);
+                    m_aTiles[x, y] = tile;
+                    m_aTileKeys[x, y] = entry.Key;
                     if (!string.IsNullOrEmpty(entry.Key))
                         oUsed.Add(entry.Key);
-                    this.Controls.Add(pb);
                 }
+        }
+
+        private int m_iTickCounter;
+        private void moveTimer_Tick(object sender, EventArgs e)
+        {
+            m_iTickCounter++;
+            ChangePicture();
+            Invalidate();
         }
 
         private void ChangePicture()
         {
-            if (m_iXCovers <= 0 || m_iYCovers <= 0) { if (m_iTickCounter <= 6) DiagLog.Write("ChangePicture skipped: no grid"); return; }
-            if (m_bPinned) { if (m_iTickCounter <= 6) DiagLog.Write("ChangePicture skipped: pinned"); return; }
+            if (m_iXCovers <= 0 || m_iYCovers <= 0) return;
+            if (m_bPinned) return;
 
             int iX = s_oRand.Next(m_iXCovers);
             int iY = s_oRand.Next(m_iYCovers);
@@ -325,35 +410,29 @@ namespace ScreenSaver
                 for (int y = 0; y < m_iYCovers; y++)
                 {
                     string k = m_aTileKeys[x, y];
-                    if (!string.IsNullOrEmpty(k))
-                        oOnScreen.Add(k);
+                    if (!string.IsNullOrEmpty(k)) oOnScreen.Add(k);
                 }
 
             var entry = m_oCoverMgr.GetRandomEntry(oOnScreen);
-            if (m_iTickCounter <= 6) DiagLog.Write("ChangePicture tick #" + m_iTickCounter + " at (" + iX + "," + iY + ") newKey='" + entry.Key + "' newImgNull=" + (entry.Value == null));
-            m_aPictureBoxes[iX, iY].Image = entry.Value;
+            m_aTiles[iX, iY].SetImage(entry.Value);
             m_aTileKeys[iX, iY] = entry.Key;
 
-            // The swapped-in tile may match what's currently playing (#11), so
-            // re-evaluate highlights every tick.
             RefreshHighlights();
         }
 
-        /// <summary>
-        /// Walks every tile and flips its Highlighted flag based on whether its
-        /// key matches the currently-playing SMTC key. Cheap - one pass over the
-        /// mosaic, only changes flags that actually flipped.
-        /// </summary>
+        /// <summary>Flip each tile's highlight based on whether its key matches the
+        /// currently-playing SMTC key.</summary>
         private void RefreshHighlights()
         {
-            if (m_aPictureBoxes == null) return;
+            if (m_aTiles == null) return;
             string playing = m_sCurrentPlayingKey;
             for (int x = 0; x < m_iXCovers; x++)
                 for (int y = 0; y < m_iYCovers; y++)
                 {
-                    var pb = m_aPictureBoxes[x, y];
-                    if (pb == null) continue;
-                    pb.Highlighted = !string.IsNullOrEmpty(playing) && string.Equals(m_aTileKeys[x, y], playing, StringComparison.OrdinalIgnoreCase);
+                    var t = m_aTiles[x, y];
+                    if (t == null) continue;
+                    t.Highlighted = !string.IsNullOrEmpty(playing) &&
+                        string.Equals(m_aTileKeys[x, y], playing, StringComparison.OrdinalIgnoreCase);
                 }
         }
 
@@ -361,186 +440,31 @@ namespace ScreenSaver
 
         #region Focal "Now Playing" overlay
 
-        private void BuildFocalOverlay()
-        {
-            int iFocal = (int)(Math.Min(ClientSize.Width, ClientSize.Height) * 0.45);
-            if (iFocal < 64) iFocal = 64;
-            int iSibling = Math.Max(32, iFocal / 3);
-
-            m_oFocalShade = new Panel
-            {
-                BackColor = Color.FromArgb(140, 0, 0, 0),
-                Size = ClientSize,
-                Location = Point.Empty,
-                Visible = false
-            };
-            this.Controls.Add(m_oFocalShade);
-
-            int focalX = (ClientSize.Width - iFocal) / 2;
-            int focalY = (ClientSize.Height - iFocal) / 2;
-
-            m_oFocalBox = new FadingPictureBox
-            {
-                Size = new Size(iFocal, iFocal),
-                Location = new Point(focalX, focalY),
-                BackColor = Color.Black,
-                Visible = false,
-                TransitionDurationMs = 600
-            };
-            this.Controls.Add(m_oFocalBox);
-
-            int captionH = Math.Max(40, iFocal / 8);
-            m_oFocalCaption = new Label
-            {
-                AutoSize = false,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Color.White,
-                BackColor = Color.Transparent,
-                Font = new Font("Segoe UI", Math.Max(10f, iFocal / 22f), FontStyle.Regular),
-                Size = new Size((int)(iFocal * 1.6), captionH * 3),
-                Location = new Point(
-                    (ClientSize.Width - (int)(iFocal * 1.6)) / 2,
-                    focalY + iFocal + 12),
-                Visible = false
-            };
-            this.Controls.Add(m_oFocalCaption);
-
-            // Sibling thumbnail (#8) - tucked just above-right of the focal tile so
-            // it reads as "and there's more of this artist in your library."
-            m_oSiblingBox = new FadingPictureBox
-            {
-                Size = new Size(iSibling, iSibling),
-                Location = new Point(focalX + iFocal + 12, focalY),
-                BackColor = Color.Black,
-                Visible = false,
-                TransitionDurationMs = 400
-            };
-            this.Controls.Add(m_oSiblingBox);
-
-            m_oSiblingCaption = new Label
-            {
-                AutoSize = false,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Color.FromArgb(200, 200, 200),
-                BackColor = Color.Transparent,
-                Font = new Font("Segoe UI", Math.Max(8f, iSibling / 14f), FontStyle.Italic),
-                Size = new Size(iSibling + 60, captionH),
-                Location = new Point(focalX + iFocal + 12 - 30, focalY + iSibling + 4),
-                Visible = false
-            };
-            this.Controls.Add(m_oSiblingCaption);
-
-            foreach (var pb in m_aPictureBoxes)
-                if (pb != null) pb.SendToBack(); // mosaic is the bottom layer
-            m_oFocalShade.BringToFront();
-            m_oFocalBox.BringToFront();
-            m_oSiblingBox.BringToFront();
-            m_oFocalCaption.BringToFront();
-            m_oSiblingCaption.BringToFront();
-        }
-
         private void OnNowPlayingUpdated(NowPlayingMonitor.NowPlayingInfo info)
         {
-            if (m_oFocalBox == null || info == null) return;
-            if (m_bPinned) return; // pin overrides SMTC display until unpinned
+            if (info == null) return;
+            if (m_bPinned) return;
 
             m_sCurrentPlayingKey = AlbumCoverMgr.BuildKey(info.Artist, info.Album);
-            m_oFocalBox.Image = info.Cover;
-            m_oFocalCaption.Text = BuildCaption(info, m_oCoverMgr?.GetMetadata(m_sCurrentPlayingKey));
-            m_oFocalShade.Visible = true;
-            m_oFocalBox.Visible = true;
-            m_oFocalCaption.Visible = true;
+            m_oFeatureTile.SetImage(info.Cover);
+            m_bFeatureVisible = info.Cover != null;
 
-            ShowSibling(m_sCurrentPlayingKey);
             RefreshHighlights();
+            Invalidate();
         }
 
         private void OnNowPlayingCleared()
         {
-            if (m_oFocalBox == null) return;
             m_sCurrentPlayingKey = null;
-            if (m_bPinned) return; // keep the pin visible even if SMTC quiets down
-            m_oFocalShade.Visible = false;
-            m_oFocalBox.Visible = false;
-            m_oFocalCaption.Visible = false;
-            m_oSiblingBox.Visible = false;
-            m_oSiblingCaption.Visible = false;
+            if (m_bPinned) return;
+            m_bFeatureVisible = false;
             RefreshHighlights();
-        }
-
-        private void ShowSibling(string playingKey)
-        {
-            if (m_oCoverMgr == null || string.IsNullOrEmpty(playingKey))
-            {
-                m_oSiblingBox.Visible = false;
-                m_oSiblingCaption.Visible = false;
-                return;
-            }
-            string siblingKey = m_oCoverMgr.GetSiblingKey(playingKey);
-            if (string.IsNullOrEmpty(siblingKey))
-            {
-                m_oSiblingBox.Visible = false;
-                m_oSiblingCaption.Visible = false;
-                return;
-            }
-            var siblingImg = m_oCoverMgr.GetPictureByKey(siblingKey);
-            if (siblingImg == null)
-            {
-                m_oSiblingBox.Visible = false;
-                m_oSiblingCaption.Visible = false;
-                return;
-            }
-            var meta = m_oCoverMgr.GetMetadata(siblingKey);
-            m_oSiblingBox.Image = siblingImg;
-            m_oSiblingCaption.Text = string.IsNullOrEmpty(meta.Album)
-                ? "More by this artist"
-                : "Also: " + meta.Album;
-            m_oSiblingBox.Visible = true;
-            m_oSiblingCaption.Visible = true;
-        }
-
-        private static string BuildCaption(NowPlayingMonitor.NowPlayingInfo info, AlbumMetadata meta)
-        {
-            string top = info.Title ?? string.Empty;
-            string mid = info.Artist ?? string.Empty;
-            if (!string.IsNullOrEmpty(info.Album) && info.Album != top)
-                mid = string.IsNullOrEmpty(mid) ? info.Album : (mid + "  -  " + info.Album);
-            string bottom = string.Empty;
-            if (meta != null)
-            {
-                if (meta.Year > 0) bottom = meta.Year.ToString();
-                if (!string.IsNullOrEmpty(meta.Genre))
-                    bottom = string.IsNullOrEmpty(bottom) ? meta.Genre : (bottom + "  -  " + meta.Genre);
-            }
-            return top + "\n" + mid + (string.IsNullOrEmpty(bottom) ? string.Empty : ("\n" + bottom));
+            Invalidate();
         }
 
         #endregion
 
         #region Manage mode (mouse moved -> pause + cursor + hint)
-
-        private void BuildManageOverlay()
-        {
-            if (m_bPreviewMode) return;
-
-            m_oManageHint = new Label
-            {
-                AutoSize = false,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Color.White,
-                BackColor = Color.FromArgb(190, 30, 30, 30),
-                Font = new Font("Segoe UI", 13f, FontStyle.Regular),
-                Text = "Right-click any cover to hide it    -    Click or press Esc to exit",
-                Size = new Size(Math.Min(820, ClientSize.Width - 80), 44),
-                Visible = false
-            };
-            m_oManageHint.Location = new Point((ClientSize.Width - m_oManageHint.Width) / 2, 18);
-            this.Controls.Add(m_oManageHint);
-            m_oManageHint.BringToFront();
-
-            m_oManageTimer = new System.Windows.Forms.Timer { Interval = MANAGE_MODE_TIMEOUT_MS };
-            m_oManageTimer.Tick += (s, e) => ExitManageMode();
-        }
 
         private void EnterManageMode()
         {
@@ -548,13 +472,15 @@ namespace ScreenSaver
             m_bManageMode = true;
             Cursor.Show();
             moveTimer.Stop();
-            if (m_oManageHint != null)
+            m_bManageHintVisible = true;
+            if (m_oManageTimer == null)
             {
-                m_oManageHint.Visible = true;
-                m_oManageHint.BringToFront();
+                m_oManageTimer = new System.Windows.Forms.Timer { Interval = MANAGE_MODE_TIMEOUT_MS };
+                m_oManageTimer.Tick += (s, e) => ExitManageMode();
             }
-            m_oManageTimer?.Stop();
-            m_oManageTimer?.Start();
+            m_oManageTimer.Stop();
+            m_oManageTimer.Start();
+            Invalidate();
         }
 
         private void ExtendManageMode()
@@ -569,26 +495,21 @@ namespace ScreenSaver
             if (!m_bManageMode) return;
             m_bManageMode = false;
             m_oManageTimer?.Stop();
-            if (m_oManageHint != null) m_oManageHint.Visible = false;
+            m_bManageHintVisible = false;
             if (!m_bPreviewMode) Cursor.Hide();
             if (!m_bPinned) moveTimer.Start();
-            // Reset the move baseline so the very next mouse twitch isn't immediately
-            // treated as a "moved past threshold" event - the user needs to actually
-            // start a fresh interaction to re-enter manage mode.
             mouseLocation = Point.Empty;
+            Invalidate();
         }
 
         #endregion
 
         #region Click-to-pin (#2) and right-click to hide
-        private void OnTileClicked(int x, int y, MouseEventArgs e)
+
+        private void HandleTileClick(int x, int y, MouseEventArgs e)
         {
             if (m_bPreviewMode) return;
 
-            // Right-click: hide the album (add to blocklist, swap tile, brief toast).
-            // Never exits - hiding wouldn't make sense if the screensaver vanished
-            // before you could see which one got hidden. Also bumps the manage-mode
-            // timer so the user can chain several hides without it timing out.
             if (e.Button == MouseButtons.Right)
             {
                 HideTile(x, y);
@@ -596,7 +517,6 @@ namespace ScreenSaver
                 return;
             }
 
-            // Shift+left-click: pin the tile.
             if (Control.ModifierKeys.HasFlag(Keys.Shift))
             {
                 PinTile(x, y);
@@ -616,8 +536,6 @@ namespace ScreenSaver
             var meta = m_oCoverMgr.GetMetadata(key);
             m_oCoverMgr.Blocklist.Block(key);
 
-            // Replace the now-hidden tile with a fresh pick (which automatically
-            // skips the new blocklist entry because GetRandomEntry uses the filter).
             HashSet<string> onScreen = new HashSet<string>();
             for (int xx = 0; xx < m_iXCovers; xx++)
                 for (int yy = 0; yy < m_iYCovers; yy++)
@@ -626,61 +544,45 @@ namespace ScreenSaver
                     if (!string.IsNullOrEmpty(k)) onScreen.Add(k);
                 }
             var entry = m_oCoverMgr.GetRandomEntry(onScreen);
-            m_aPictureBoxes[x, y].Image = entry.Value;
+            m_aTiles[x, y].SetImage(entry.Value);
             m_aTileKeys[x, y] = entry.Key;
 
-            // Wipe any other on-screen instances of the hidden album too (rare but possible).
+            // Wipe any other on-screen instances of the hidden album.
             for (int xx = 0; xx < m_iXCovers; xx++)
                 for (int yy = 0; yy < m_iYCovers; yy++)
                 {
                     if (string.Equals(m_aTileKeys[xx, yy], key, StringComparison.OrdinalIgnoreCase))
                     {
                         var alt = m_oCoverMgr.GetRandomEntry(onScreen);
-                        m_aPictureBoxes[xx, yy].Image = alt.Value;
+                        m_aTiles[xx, yy].SetImage(alt.Value);
                         m_aTileKeys[xx, yy] = alt.Key;
                     }
                 }
 
             ShowHiddenToast(meta);
             RefreshHighlights();
+            Invalidate();
         }
 
         private void ShowHiddenToast(AlbumMetadata meta)
         {
-            if (m_oHiddenToast == null)
+            m_sToastText = !string.IsNullOrEmpty(meta?.Artist) || !string.IsNullOrEmpty(meta?.Album)
+                ? ($"Hidden: {meta.Artist} - {meta.Album}").Trim(' ', '-')
+                : "Hidden.";
+            m_bToastVisible = true;
+            if (m_oToastTimer == null)
             {
-                m_oHiddenToast = new Label
-                {
-                    AutoSize = false,
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    ForeColor = Color.White,
-                    BackColor = Color.FromArgb(180, 60, 0, 0),
-                    Font = new Font("Segoe UI", 14f, FontStyle.Bold),
-                    Size = new Size(Math.Min(640, ClientSize.Width - 80), 56),
-                    Visible = false
-                };
-                m_oHiddenToast.Location = new Point(
-                    (ClientSize.Width - m_oHiddenToast.Width) / 2,
-                    32);
-                this.Controls.Add(m_oHiddenToast);
-                m_oHiddenToast.BringToFront();
-
                 m_oToastTimer = new System.Windows.Forms.Timer { Interval = 2200 };
                 m_oToastTimer.Tick += (s, e) =>
                 {
                     m_oToastTimer.Stop();
-                    if (m_oHiddenToast != null) m_oHiddenToast.Visible = false;
+                    m_bToastVisible = false;
+                    Invalidate();
                 };
             }
-
-            string label = !string.IsNullOrEmpty(meta?.Artist) || !string.IsNullOrEmpty(meta?.Album)
-                ? ($"Hidden: {meta.Artist} - {meta.Album}").Trim(' ', '-')
-                : "Hidden.";
-            m_oHiddenToast.Text = label;
-            m_oHiddenToast.Visible = true;
-            m_oHiddenToast.BringToFront();
             m_oToastTimer.Stop();
             m_oToastTimer.Start();
+            Invalidate();
         }
 
         private void PinTile(int x, int y)
@@ -694,48 +596,28 @@ namespace ScreenSaver
             m_bPinned = true;
             m_sPinnedKey = key;
 
-            m_oFocalBox.Image = img;
-            m_oFocalCaption.Text = BuildPinnedCaption(key);
-            m_oFocalShade.Visible = true;
-            m_oFocalBox.Visible = true;
-            m_oFocalCaption.Visible = true;
-            // Hide sibling box during pin to keep the focus clean - the user is
-            // examining a specific album, not browsing.
-            m_oSiblingBox.Visible = false;
-            m_oSiblingCaption.Visible = false;
+            m_oFeatureTile.SetImage(img);
+            m_bFeatureVisible = true;
+            Invalidate();
         }
 
         private void Unpin()
         {
             m_bPinned = false;
             m_sPinnedKey = null;
-            // Restore whatever SMTC was showing (if anything) or hide the focal entirely.
             if (m_oNowPlaying?.Current != null)
                 OnNowPlayingUpdated(m_oNowPlaying.Current);
             else
                 OnNowPlayingCleared();
         }
 
-        private string BuildPinnedCaption(string key)
-        {
-            if (m_oCoverMgr == null) return key;
-            var meta = m_oCoverMgr.GetMetadata(key);
-            string artist = string.IsNullOrEmpty(meta.Artist) ? "(unknown artist)" : meta.Artist;
-            string album = string.IsNullOrEmpty(meta.Album) ? "(unknown album)" : meta.Album;
-            string yearGenre = string.Empty;
-            if (meta.Year > 0) yearGenre = meta.Year.ToString();
-            if (!string.IsNullOrEmpty(meta.Genre))
-                yearGenre = string.IsNullOrEmpty(yearGenre) ? meta.Genre : (yearGenre + "  -  " + meta.Genre);
-            return artist + "\n" + album + (string.IsNullOrEmpty(yearGenre) ? string.Empty : ("\n" + yearGenre));
-        }
         #endregion
 
-        #region Quitting the Screensaver
+        #region Input / quitting
+
         private void ScreenSaverForm_MouseMove(object sender, MouseEventArgs e)
         {
             if (m_bPreviewMode) return;
-            // In manage mode, every movement keeps us alive (resets the auto-exit
-            // timer) so the user can roam toward a cover to hide it.
             if (m_bManageMode)
             {
                 ExtendManageMode();
@@ -744,14 +626,8 @@ namespace ScreenSaver
             }
             if (!mouseLocation.IsEmpty)
             {
-                if (Math.Abs(mouseLocation.X - e.X) > 5 ||
-                    Math.Abs(mouseLocation.Y - e.Y) > 5)
-                {
-                    // First real movement: enter manage mode rather than exit immediately.
-                    // Gives the user a chance to right-click a cover to hide it. Left-click
-                    // or any key still exits.
+                if (Math.Abs(mouseLocation.X - e.X) > 5 || Math.Abs(mouseLocation.Y - e.Y) > 5)
                     EnterManageMode();
-                }
             }
             mouseLocation = e.Location;
         }
@@ -759,7 +635,6 @@ namespace ScreenSaver
         private void ScreenSaverForm_KeyPress(object sender, KeyPressEventArgs e)
         {
             if (m_bPreviewMode) return;
-            // Escape always exits. Other keys: if pinned, unpin; otherwise exit.
             if (e.KeyChar == (char)Keys.Escape) { Application.Exit(); return; }
             if (m_bPinned) { Unpin(); return; }
             Application.Exit();
@@ -768,8 +643,13 @@ namespace ScreenSaver
         private void ScreenSaverForm_MouseClick(object sender, MouseEventArgs e)
         {
             if (m_bPreviewMode) return;
-            // Right-click on the background does nothing - keeps it consistent with
-            // right-click on a tile (which hides instead of exiting).
+            // Route the click to the tile under the cursor (pin / hide / exit).
+            if (TileAt(e.Location, out int x, out int y))
+            {
+                HandleTileClick(x, y, e);
+                return;
+            }
+            // Outside the grid: left-click exits (or unpins), right-click does nothing.
             if (e.Button != MouseButtons.Left) return;
             if (m_bPinned) { Unpin(); return; }
             Application.Exit();
