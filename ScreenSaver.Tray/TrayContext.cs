@@ -35,7 +35,7 @@ namespace ScreenSaver.Tray
 
         public TrayContext()
         {
-            m_oCover = new AlbumCoverMgr();
+            m_oCover = new AlbumCoverMgr(lazyLoad: true);
             var filter = CoverFilter.LoadFromRegistry();
             if (!filter.IsEmpty) m_oCover.SetFilter(filter);
 

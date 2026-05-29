@@ -52,7 +52,7 @@ namespace ScreenSaver
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 DiagLog.Write("Creating AlbumCoverMgr");
-                AlbumCoverMgr oCoverMgr = new AlbumCoverMgr();
+                AlbumCoverMgr oCoverMgr = new AlbumCoverMgr(lazyLoad: true);
                 DiagLog.Write("AlbumCoverMgr ready, " + oCoverMgr.GetAlbumTotal() + " covers in cache");
 
                 DiagLog.Write("Creating NowPlayingMonitor");

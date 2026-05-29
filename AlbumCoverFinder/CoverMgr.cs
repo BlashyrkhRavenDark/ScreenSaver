@@ -40,6 +40,14 @@ namespace AlbumCoverFinder
         private int m_iLastBackupCount = 0;
         private string m_sMusicPath;
         private Dictionary<string, Image> m_dPictures;
+        // Lazy load (read-only consumers: screensaver, tray): on startup we record
+        // each key's PNG path here WITHOUT decoding it, then decode on demand in
+        // GetImage and cache the result into m_dPictures. This turns a multi-second
+        // "decode all 2000+ covers" startup into an instant index read - tiles decode
+        // their own cover the first time they're shown. AlbumCoverFinder loads eager
+        // (m_bLazyLoad = false) because it scans, edits, and re-saves the cache.
+        private readonly bool m_bLazyLoad;
+        private readonly Dictionary<string, string> m_dKeyToPng = new Dictionary<string, string>();
         private Dictionary<string, AlbumMetadata> m_dMetadata = new Dictionary<string, AlbumMetadata>();
         private List<string> m_aOrderedKeys = new List<string>();
         // Default cap is 0 = unlimited. Now that each cover is its own PNG file,
@@ -77,15 +85,17 @@ namespace AlbumCoverFinder
         #endregion
 
         #region Constructors
-        public AlbumCoverMgr(string p_sCustomMusicPath)
+        public AlbumCoverMgr(string p_sCustomMusicPath, bool lazyLoad = false)
         {
+            m_bLazyLoad = lazyLoad;
             m_sMusicPath = p_sCustomMusicPath;
             InitializePaths();
             LoadBackupData();
         }
 
-        public AlbumCoverMgr()
+        public AlbumCoverMgr(bool lazyLoad = false)
         {
+            m_bLazyLoad = lazyLoad;
             m_sMusicPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             InitializePaths();
             LoadBackupData();
@@ -125,7 +135,7 @@ namespace AlbumCoverFinder
         {
             var pool = GetFilteredPool();
             if (pool.Count > 0)
-                return m_dPictures[pool[s_oRand.Next(pool.Count)]];
+                return GetImage(pool[s_oRand.Next(pool.Count)]) ?? BuildPlaceholder();
             return BuildPlaceholder();
         }
 
@@ -148,12 +158,12 @@ namespace AlbumCoverFinder
         /// </summary>
         public List<string> GetFilteredPool()
         {
-            if (m_dPictures == null || m_dPictures.Count == 0) return new List<string>();
+            if (m_aOrderedKeys.Count == 0) return new List<string>();
 
             List<string> result = new List<string>(m_aOrderedKeys.Count);
             foreach (string k in m_aOrderedKeys)
             {
-                if (!m_dPictures.ContainsKey(k)) continue;
+                if (!IsAvailable(k)) continue;
                 if (m_oBlocklist != null && m_oBlocklist.IsBlocked(k)) continue;
                 if (m_oFilter != null)
                 {
@@ -251,12 +261,12 @@ namespace AlbumCoverFinder
                 if (available.Count > 0)
                 {
                     string pick = available[s_oRand.Next(available.Count)];
-                    return new KeyValuePair<string, Image>(pick, m_dPictures[pick]);
+                    return new KeyValuePair<string, Image>(pick, GetImage(pick));
                 }
             }
 
             string chosen = pool[s_oRand.Next(pool.Count)];
-            return new KeyValuePair<string, Image>(chosen, m_dPictures[chosen]);
+            return new KeyValuePair<string, Image>(chosen, GetImage(chosen));
         }
 
         /// <summary>
@@ -265,9 +275,41 @@ namespace AlbumCoverFinder
         /// </summary>
         public Image GetPictureByKey(string p_sKey)
         {
-            if (string.IsNullOrEmpty(p_sKey) || m_dPictures == null) return null;
+            return GetImage(p_sKey);
+        }
+
+        /// <summary>
+        /// Returns the decoded cover for a key. In lazy mode the PNG is decoded on
+        /// first request and cached into m_dPictures; subsequent calls are dictionary
+        /// hits. Returns null if the key is unknown or the PNG can't be decoded.
+        /// </summary>
+        private Image GetImage(string p_sKey)
+        {
+            if (string.IsNullOrEmpty(p_sKey)) return null;
             Image img;
-            return m_dPictures.TryGetValue(p_sKey, out img) ? img : null;
+            if (m_dPictures != null && m_dPictures.TryGetValue(p_sKey, out img)) return img;
+            if (m_dKeyToPng.TryGetValue(p_sKey, out string sPng))
+            {
+                try
+                {
+                    img = LoadImageNoLock(sPng);
+                    if (img != null)
+                    {
+                        if (m_dPictures == null) m_dPictures = new Dictionary<string, Image>();
+                        m_dPictures[p_sKey] = img;
+                    }
+                    return img;
+                }
+                catch { return null; }
+            }
+            return null;
+        }
+
+        /// <summary>True if a cover exists for this key (decoded or lazily on disk).</summary>
+        private bool IsAvailable(string p_sKey)
+        {
+            return !string.IsNullOrEmpty(p_sKey)
+                && ((m_dPictures != null && m_dPictures.ContainsKey(p_sKey)) || m_dKeyToPng.ContainsKey(p_sKey));
         }
 
         public static string BuildKey(string p_sArtist, string p_sAlbum)
@@ -302,7 +344,8 @@ namespace AlbumCoverFinder
 
         public int GetAlbumTotal()
         {
-            return (m_dPictures != null ? m_dPictures.Count : 0);
+            // Count of known covers (decoded or lazily on disk), not just decoded ones.
+            return m_aOrderedKeys != null ? m_aOrderedKeys.Count : 0;
         }
 
         public void DeleteAlbumBackup()
@@ -312,6 +355,7 @@ namespace AlbumCoverFinder
                 m_dPictures.Clear();
             else
                 m_dPictures = new Dictionary<string, Image>();
+            m_dKeyToPng.Clear();
             m_dMetadata.Clear();
             m_aOrderedKeys.Clear();
             m_iLastBackupCount = 0;
@@ -406,9 +450,9 @@ namespace AlbumCoverFinder
                 m_aOrderedKeys.Clear();
             }
 
-            m_iLastBackupCount = m_dPictures.Count;
-            if (oAlbumFoundEvent != null && m_dPictures.Count > 0)
-                oAlbumFoundEvent(m_dPictures.Count, GetRandomPicture());
+            m_iLastBackupCount = m_aOrderedKeys.Count;
+            if (oAlbumFoundEvent != null && m_aOrderedKeys.Count > 0)
+                oAlbumFoundEvent(m_aOrderedKeys.Count, GetRandomPicture());
         }
 
         private void LoadFromCacheDir()
@@ -421,13 +465,20 @@ namespace AlbumCoverFinder
             {
                 string sKey = lines[i];
                 if (string.IsNullOrEmpty(sKey)) continue;
-                if (m_dPictures.ContainsKey(sKey)) continue;
+                if (IsAvailable(sKey)) continue;
                 string sPngPath = Path.Combine(m_sCacheDir, i + ".png");
                 if (!File.Exists(sPngPath)) continue;
                 try
                 {
-                    Image img = LoadImageNoLock(sPngPath);
-                    m_dPictures[sKey] = img;
+                    if (m_bLazyLoad)
+                    {
+                        // Defer decoding: just remember where this cover lives.
+                        m_dKeyToPng[sKey] = sPngPath;
+                    }
+                    else
+                    {
+                        m_dPictures[sKey] = LoadImageNoLock(sPngPath);
+                    }
                     m_aOrderedKeys.Add(sKey);
 
                     // Metadata sidecar - optional, missing is fine for caches written
