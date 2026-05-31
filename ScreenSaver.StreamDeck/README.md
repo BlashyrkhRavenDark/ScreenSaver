@@ -82,10 +82,30 @@ DistributionTool.exe -b -i sdPlugin -o .
 
 That produces `com.blashyrkh.screensaver.streamDeckPlugin` — a single file you can double-click on any machine with Stream Deck installed.
 
+## Publishing to Elgato Marketplace
+
+Distribution and review go through **Maker Console** (https://maker.elgato.com). The modern toolchain is the **Stream Deck CLI** (`npm i -g @elgato/cli`, command `streamdeck`), which supersedes the old `DistributionTool.exe`.
+
+1. **Register as a Maker.** Sign in at https://maker.elgato.com with your Elgato account and create a Maker organization — the org name becomes your public author name.
+2. **Make the manifest submission-ready** (`sdPlugin/manifest.json`):
+   - `UUID` reverse-DNS, author + plugin name, unchangeable after publish — `com.blashyrkh.screensaver` is fine. Action UUIDs must be prefixed by it (they are).
+   - `Version` numeric `x.y.z[.b]` (e.g. `1.0.0`).
+   - `Name`, `Description`, `Category`, `URL` (homepage/README) all accurate.
+3. **Provide Marketplace art:**
+   - Plugin icon PNG **256×256** + **512×512** (`@2x`).
+   - Category/action icons monochrome white (`#FFFFFF`) on transparent, SVG preferred (28×28/56×56 category, 20×20/40×40 action).
+   - At least **one preview image** in a `previews/` folder (a real screenshot of the cover wall on a deck sells it).
+4. **Validate:** `streamdeck validate com.blashyrkh.screensaver.sdPlugin` — fix every error/warning (schema, file layout, icon sizes).
+5. **Package:** `streamdeck pack com.blashyrkh.screensaver.sdPlugin` → `.streamDeckPlugin` (re-runs validation).
+6. **Test the packaged build** on a clean install; optionally get beta feedback in the Marketplace Makers Discord.
+7. **Submit in Maker Console:** upload the package, fill in store listing (name, description, category, previews, pricing — free is fine), submit for review. Elgato may request changes; once approved it appears on the Marketplace and Maker Console tracks downloads/updates.
+
+Guidelines worth pre-checking: 2–30 actions per plugin, property inspector auto-saves on change (ours does — no Save button), no donation/copyright text in the inspector, no static non-configurable actions. Refs: https://docs.elgato.com/streamdeck/sdk/v1/introduction/distribution/ and https://docs.elgato.com/guidelines/stream-deck/plugins/
+
 ## TODOs and placeholders
 
-- **`sdPlugin\icons\` is empty.** Stream Deck needs PNG icons (`plugin.png`+`plugin@2x.png`, `category.png`+`category@2x.png`, `cover-tile.png`+`cover-tile@2x.png`) before the action can render properly when no cover is playing. Make your own 72x72 + 144x144 PNGs and drop them in `sdPlugin\icons\`.
 - **Multi-action button defaults.** Each tile defaults to `PlayPause`. If you'd rather have them default to "no action" so users explicitly opt in, change the `TileSettings` default in `CoverTileAction.cs`.
+- **Marketplace icon sizes.** `sdPlugin\icons\` has the dev icons. Elgato Marketplace submission wants a 256×256 (+512×512 @2x) plugin icon and at least one preview image — see "Publishing to Elgato Marketplace" below.
 
 ## Code reuse note
 
