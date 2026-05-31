@@ -58,6 +58,12 @@
     .preview .cell.active {
       background: linear-gradient(135deg, #4a9eff 0%, #2563eb 100%);
     }
+    .sdpi-checkbox {
+      display: flex;
+      align-items: center;
+    }
+    .sdpi-checkbox input { margin: 0 6px 0 0; flex-shrink: 0; }
+    .sdpi-checkbox label { color: #d8d8d8; cursor: pointer; }
     .hint {
       color: #707070;
       font-size: 8pt;
@@ -112,6 +118,14 @@
       </div>
     </div>
 
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Action icon</div>
+      <div class="sdpi-item-value sdpi-checkbox">
+        <input type="checkbox" id="showActionIcon" />
+        <label for="showActionIcon">Show the action badge on the key</label>
+      </div>
+    </div>
+
     <p class="hint">
       Drop the same action on multiple keys to spread one album cover across them.
       For a 3 x 3 cover wall, use 9 keys with grid size 3 and pick row 0&ndash;2 / column 0&ndash;2 for each.
@@ -123,7 +137,7 @@
   <script>
     let websocket = null;
     let pluginUUID = null;
-    let settings = { gridSize: 1, row: 0, column: 0, action: 'PlayPause' };
+    let settings = { gridSize: 1, row: 0, column: 0, action: 'PlayPause', showActionIcon: true };
 
     function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
       pluginUUID = inUUID;
@@ -134,7 +148,8 @@
           gridSize: parseInt(s.gridSize) || 1,
           row: parseInt(s.row) || 0,
           column: parseInt(s.column) || 0,
-          action: s.action || 'PlayPause'
+          action: s.action || 'PlayPause',
+          showActionIcon: s.showActionIcon !== false
         };
       }
 
@@ -185,11 +200,13 @@
       const rowSel = document.getElementById('row');
       const colSel = document.getElementById('column');
       const actSel = document.getElementById('action');
+      const iconChk = document.getElementById('showActionIcon');
 
       gridSel.value = String(settings.gridSize);
       populateOptions(rowSel, settings.gridSize, settings.row);
       populateOptions(colSel, settings.gridSize, settings.column);
       actSel.value = settings.action;
+      iconChk.checked = settings.showActionIcon;
       renderPreview();
 
       gridSel.addEventListener('change', () => {
@@ -217,6 +234,11 @@
 
       actSel.addEventListener('change', () => {
         settings.action = actSel.value;
+        persist();
+      });
+
+      iconChk.addEventListener('change', () => {
+        settings.showActionIcon = iconChk.checked;
         persist();
       });
     }

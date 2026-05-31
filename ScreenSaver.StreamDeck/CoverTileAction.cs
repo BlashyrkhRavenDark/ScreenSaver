@@ -43,6 +43,9 @@ namespace ScreenSaver.StreamDeck
             public int Row = 0;
             public int Column = 0;
             public KeyAction Action = KeyAction.PlayPause;
+            // Whether to stamp the on-press action badge in the lower-left corner.
+            // Off lets the artwork fill the whole key with nothing overlaid.
+            public bool ShowActionIcon = true;
 
             public static TileSettings FromPayload(JObject settings)
             {
@@ -52,6 +55,7 @@ namespace ScreenSaver.StreamDeck
                 t.Row = Clamp(settings.Value<int?>("row") ?? 0, 0, t.GridSize - 1);
                 t.Column = Clamp(settings.Value<int?>("column") ?? 0, 0, t.GridSize - 1);
                 Enum.TryParse(settings.Value<string>("action") ?? "PlayPause", true, out t.Action);
+                t.ShowActionIcon = settings.Value<bool?>("showActionIcon") ?? true;
                 return t;
             }
 
@@ -62,7 +66,8 @@ namespace ScreenSaver.StreamDeck
                     ["gridSize"] = GridSize,
                     ["row"] = Row,
                     ["column"] = Column,
-                    ["action"] = Action.ToString()
+                    ["action"] = Action.ToString(),
+                    ["showActionIcon"] = ShowActionIcon
                 };
             }
 
@@ -128,21 +133,21 @@ namespace ScreenSaver.StreamDeck
 
         private async void OnUpdated(global::ScreenSaver.NowPlayingMonitor.NowPlayingInfo info)
         {
-            if (info == null || info.Cover == null)
-            {
-                await SetIdleAsync();
-                return;
-            }
+            // No cover to show right now (track without art, or nothing playing):
+            // keep whatever was last painted so the deck never blanks. See OnCleared.
+            if (info == null || info.Cover == null) return;
 
             // Cache key: cover identity + this tile's crop parameters + the action
-            // (so the badge updates when the user reassigns the key).
+            // and whether its badge is shown (so the tile updates when the user
+            // reassigns the key or toggles the badge off).
             string hash = (info.Title ?? "") + "|" + (info.Artist ?? "") + "|"
                           + m_oSettings.GridSize + "|" + m_oSettings.Row + "|" + m_oSettings.Column
-                          + "|" + m_oSettings.Action;
+                          + "|" + m_oSettings.Action + "|" + m_oSettings.ShowActionIcon;
             if (hash == m_sLastRenderedHash) return;
             m_sLastRenderedHash = hash;
 
-            string base64 = RenderTile(info.Cover, m_oSettings.GridSize, m_oSettings.Row, m_oSettings.Column, m_oSettings.Action);
+            string base64 = RenderTile(info.Cover, m_oSettings.GridSize, m_oSettings.Row, m_oSettings.Column,
+                                       m_oSettings.Action, m_oSettings.ShowActionIcon);
             if (!string.IsNullOrEmpty(base64))
                 await Connection.SetImageAsync(base64);
 
@@ -151,26 +156,19 @@ namespace ScreenSaver.StreamDeck
             await Connection.SetTitleAsync(string.Empty);
         }
 
-        private async void OnCleared()
-        {
-            await SetIdleAsync();
-        }
-
-        private async Task SetIdleAsync()
-        {
-            if (m_sLastRenderedHash == "__idle__") return;
-            m_sLastRenderedHash = "__idle__";
-            await Connection.SetImageAsync((string)null);
-            await Connection.SetTitleAsync(string.Empty);
-        }
+        // Playback stopped or paused. Deliberately a no-op: the last album cover
+        // stays on the deck rather than reverting to the blank key icon, so pausing
+        // keeps the artwork visible until the next track actually starts.
+        private void OnCleared() { }
 
         /// <summary>
         /// Crops the (row, column) slice of an NxN grid out of the source cover,
-        /// stamps a small action badge in the lower-left corner indicating which
-        /// media control this key triggers, and returns the result as a
-        /// Stream-Deck-friendly base64 data URL.
+        /// optionally stamps a small action badge in the lower-left corner indicating
+        /// which media control this key triggers, and returns the result as a
+        /// Stream-Deck-friendly base64 data URL. When <paramref name="showActionIcon"/>
+        /// is false the artwork fills the whole key with nothing overlaid.
         /// </summary>
-        private static string RenderTile(Image source, int gridSize, int row, int column, KeyAction action)
+        private static string RenderTile(Image source, int gridSize, int row, int column, KeyAction action, bool showActionIcon)
         {
             try
             {
@@ -196,7 +194,8 @@ namespace ScreenSaver.StreamDeck
                         new Rectangle(srcX, srcY, cellSide, cellSide),
                         GraphicsUnit.Pixel);
 
-                    DrawActionBadge(g, action);
+                    if (showActionIcon)
+                        DrawActionBadge(g, action);
 
                     bmp.Save(ms, ImageFormat.Png);
                     return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());

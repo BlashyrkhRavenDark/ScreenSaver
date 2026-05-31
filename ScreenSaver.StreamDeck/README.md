@@ -10,6 +10,8 @@ Built on the same `NowPlayingMonitor` the screensaver itself uses, listening to 
 - **2x2 grid** — same cover spread across 4 keys.
 - **3x3 grid** — same cover spread across 9 keys.
 
+When playback is **paused or stopped**, the last album cover stays on the deck — it doesn't blank back to the key icon — so the artwork remains until a new track actually starts.
+
 For each key in the grid, the property inspector lets you pick:
 
 | Action | Behavior |
@@ -22,6 +24,8 @@ For each key in the grid, the property inspector lets you pick:
 | `None` | Visual tile only; press does nothing. |
 
 The fallback path matters because some apps (notably some browser tabs and iTunes-on-Windows) publish metadata to SMTC but reject session-level `TrySkipNext`. The global media key works universally.
+
+There's also a **Show action icon** checkbox per key. On (default) stamps a small badge in the lower-left corner hinting at the key's on-press action; off lets the cover artwork fill the entire key with nothing overlaid.
 
 ## Setup walkthrough for a 3x3 cover wall
 
