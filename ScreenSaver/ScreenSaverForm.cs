@@ -45,10 +45,6 @@ namespace ScreenSaver
 
         private Point mouseLocation;
         private bool m_bPreviewMode = false;
-        // Set on a media/volume WM_KEYDOWN so the WM_CHAR it may synthesize on some
-        // keyboards is ignored by the dismiss-on-keypress handler (media keys must
-        // never tear down the screensaver).
-        private bool m_bSuppressNextKeyPress = false;
         private static readonly Random s_oRand = new Random();
         private int m_iXCovers = 16;
         private int m_iYCovers = 9;
@@ -681,49 +677,23 @@ namespace ScreenSaver
 
         #region Input / quitting
 
-        // --- Media / volume key pass-through -------------------------------------
-        // The play/pause, next, previous, volume up/down and mute keys must operate
-        // the active media app / system volume WITHOUT dismissing the screensaver.
-        // Those keys normally arrive as WM_APPCOMMAND, which we hand straight to
-        // DefWindowProc so the OS routes them. Some keyboards/drivers also deliver
-        // them as raw WM_(SYS)KEYDOWN with a media virtual-key code (and may even
-        // synthesize a WM_CHAR); we let the system translate those but flag them so
-        // the WM_CHAR-driven dismiss handler ignores the keystroke.
+        // --- Any key dismisses the screensaver -----------------------------------
+        // Character keys raise WM_CHAR (handled by ScreenSaverForm_KeyPress), but the
+        // function, arrow, modifier, and media/volume keys do NOT - and media transport
+        // buttons arrive only as WM_APPCOMMAND. We catch all of those here so EVERY key
+        // tears the saver down, matching standard screensaver behaviour. Mouse movement
+        // is deliberately not a dismiss trigger - it raises the manage overlay instead.
         private const int WM_KEYDOWN    = 0x0100;
         private const int WM_SYSKEYDOWN = 0x0104;
         private const int WM_APPCOMMAND = 0x0319;
 
-        private const int VK_VOLUME_MUTE      = 0xAD;
-        private const int VK_VOLUME_DOWN      = 0xAE;
-        private const int VK_VOLUME_UP        = 0xAF;
-        private const int VK_MEDIA_NEXT_TRACK = 0xB0;
-        private const int VK_MEDIA_PREV_TRACK = 0xB1;
-        private const int VK_MEDIA_PLAY_PAUSE = 0xB3;
-
-        private static bool IsMediaPassThroughKey(int vk)
-        {
-            // Contiguous 0xAD..0xB3 range covers mute, volume down/up, next, prev,
-            // stop and play/pause - the transport/volume keys we want to pass through.
-            return vk >= VK_VOLUME_MUTE && vk <= VK_MEDIA_PLAY_PAUSE;
-        }
-
         protected override void WndProc(ref Message m)
         {
-            if (!m_bPreviewMode)
+            if (!m_bPreviewMode &&
+                (m.Msg == WM_KEYDOWN || m.Msg == WM_SYSKEYDOWN || m.Msg == WM_APPCOMMAND))
             {
-                if (m.Msg == WM_APPCOMMAND)
-                {
-                    // Let DefWindowProc forward the app-command to the shell / media
-                    // app and the volume OSD; never treat it as a dismiss signal.
-                    base.WndProc(ref m);
-                    return;
-                }
-
-                if (m.Msg == WM_KEYDOWN || m.Msg == WM_SYSKEYDOWN)
-                {
-                    int vk = unchecked((int)(long)m.WParam) & 0xFFFF;
-                    m_bSuppressNextKeyPress = IsMediaPassThroughKey(vk);
-                }
+                Application.Exit();
+                return;
             }
 
             base.WndProc(ref m);
@@ -749,11 +719,7 @@ namespace ScreenSaver
         private void ScreenSaverForm_KeyPress(object sender, KeyPressEventArgs e)
         {
             if (m_bPreviewMode) return;
-            // A media/volume key flagged in WndProc may synthesize a WM_CHAR on some
-            // keyboards - swallow it so the saver stays up.
-            if (m_bSuppressNextKeyPress) { m_bSuppressNextKeyPress = false; return; }
-            if (e.KeyChar == (char)Keys.Escape) { Application.Exit(); return; }
-            if (m_bPinned) { Unpin(); return; }
+            // Any character key dismisses (non-character/media keys are handled in WndProc).
             Application.Exit();
         }
 
