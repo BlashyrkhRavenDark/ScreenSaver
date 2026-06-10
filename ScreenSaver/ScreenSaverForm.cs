@@ -77,6 +77,10 @@ namespace ScreenSaver
         // (manage mode). Empty when nothing is playing.
         private string m_sNowPlayingText = string.Empty;
 
+        // "Artist — Album" of the tile under the cursor (manage mode only). Takes
+        // precedence over the now-playing line while the cursor is over a known cover.
+        private string m_sHoverText = string.Empty;
+
         // Click-to-pin overlay (#2).
         private bool m_bPinned;
         private string m_sPinnedKey;
@@ -86,7 +90,7 @@ namespace ScreenSaver
         private bool m_bToastVisible;
         private System.Windows.Forms.Timer m_oToastTimer;
 
-        // Manage mode (cursor visible, swap paused, right-click-to-hide armed).
+        // Manage mode (cursor visible, right-click-to-hide armed; swaps keep running).
         private bool m_bManageMode;
         private System.Windows.Forms.Timer m_oManageTimer;
         private bool m_bManageHintVisible;
@@ -364,8 +368,10 @@ namespace ScreenSaver
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 g.DrawString("Right-click any cover to hide it    -    Click or press Esc to exit", f, br, r, sf);
 
-            // Now-playing line (artist + song title), shown just below the hint.
-            if (!string.IsNullOrEmpty(m_sNowPlayingText))
+            // Info line below the hint: the hovered cover's "Artist — Album" wins;
+            // otherwise fall back to the now-playing "Artist — Title".
+            string info = !string.IsNullOrEmpty(m_sHoverText) ? m_sHoverText : m_sNowPlayingText;
+            if (!string.IsNullOrEmpty(info))
             {
                 int nh = 48;
                 var nr = new Rectangle((w - bw) / 2, r.Bottom + 10, bw, nh);
@@ -375,7 +381,7 @@ namespace ScreenSaver
                 using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
                 {
                     g.FillRectangle(bg, nr);
-                    g.DrawString(m_sNowPlayingText, f, br, nr, sf);
+                    g.DrawString(info, f, br, nr, sf);
                 }
             }
         }
@@ -467,6 +473,7 @@ namespace ScreenSaver
             // Kick off the swapped tile's transition; the anim timer carries the rest.
             Invalidate(TileRect(iX, iY));
             RefreshHighlights();
+            if (m_bManageMode) UpdateHoverText(); // the cover under the cursor may have changed
         }
 
         /// <summary>Flip each tile's highlight based on whether its key matches the
@@ -517,23 +524,26 @@ namespace ScreenSaver
         /// <summary>"Artist - Title" for the manage-mode now-playing line.</summary>
         private static string BuildNowPlayingText(NowPlayingMonitor.NowPlayingInfo info)
         {
-            string artist = info.Artist ?? string.Empty;
-            string title = info.Title ?? string.Empty;
-            if (string.IsNullOrEmpty(artist)) return title;
-            if (string.IsNullOrEmpty(title)) return artist;
-            return artist + "  —  " + title;
+            return JoinDash(info.Artist, info.Title);
+        }
+
+        /// <summary>Joins two parts with an em-dash, dropping whichever is empty.</summary>
+        private static string JoinDash(string left, string right)
+        {
+            if (string.IsNullOrEmpty(left)) return right ?? string.Empty;
+            if (string.IsNullOrEmpty(right)) return left;
+            return left + "  —  " + right;
         }
 
         #endregion
 
-        #region Manage mode (mouse moved -> pause + cursor + hint)
+        #region Manage mode (mouse moved -> cursor + hint; swaps keep running)
 
         private void EnterManageMode()
         {
             if (m_bPreviewMode || m_bManageMode) return;
             m_bManageMode = true;
             Cursor.Show();
-            moveTimer.Stop();
             m_bManageHintVisible = true;
             if (m_oManageTimer == null)
             {
@@ -558,10 +568,38 @@ namespace ScreenSaver
             m_bManageMode = false;
             m_oManageTimer?.Stop();
             m_bManageHintVisible = false;
+            m_sHoverText = string.Empty;
             if (!m_bPreviewMode) Cursor.Hide();
-            if (!m_bPinned) moveTimer.Start();
             mouseLocation = Point.Empty;
             Invalidate();
+        }
+
+        /// <summary>Refresh the "Artist — Album" line for the tile under the cursor.
+        /// Runs on mouse moves and whenever a swap changes the cover beneath it.</summary>
+        private void UpdateHoverText()
+        {
+            string text = string.Empty;
+            if (m_bManageMode && !mouseLocation.IsEmpty && TileAt(mouseLocation, out int x, out int y))
+            {
+                string key = m_aTileKeys[x, y];
+                if (!string.IsNullOrEmpty(key))
+                {
+                    var meta = m_oCoverMgr?.GetMetadata(key);
+                    if (!string.IsNullOrEmpty(meta?.Artist) || !string.IsNullOrEmpty(meta?.Album))
+                        text = JoinDash(meta.Artist, meta.Album);
+                }
+            }
+            if (!string.Equals(text, m_sHoverText, StringComparison.Ordinal))
+            {
+                m_sHoverText = text;
+                if (m_bManageHintVisible) Invalidate(HintArea());
+            }
+        }
+
+        /// <summary>Top strip holding the manage hint and the info line below it.</summary>
+        private Rectangle HintArea()
+        {
+            return new Rectangle(0, 0, ClientSize.Width, 140);
         }
 
         #endregion
@@ -623,6 +661,7 @@ namespace ScreenSaver
 
             ShowHiddenToast(meta);
             RefreshHighlights();
+            if (m_bManageMode) UpdateHoverText();
             Invalidate();
         }
 
@@ -706,6 +745,7 @@ namespace ScreenSaver
             {
                 ExtendManageMode();
                 mouseLocation = e.Location;
+                UpdateHoverText();
                 return;
             }
             if (!mouseLocation.IsEmpty)
@@ -714,6 +754,7 @@ namespace ScreenSaver
                     EnterManageMode();
             }
             mouseLocation = e.Location;
+            if (m_bManageMode) UpdateHoverText();
         }
 
         private void ScreenSaverForm_KeyPress(object sender, KeyPressEventArgs e)
