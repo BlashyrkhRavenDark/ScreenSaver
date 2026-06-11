@@ -59,3 +59,24 @@ The real issue is child-window composition, fixed only by owner-drawing on the f
   so the command line is clean. Do NOT use `-ExecutionPolicy Bypass` (separate block).
 - The screensaver dismisses on mouse *movement*, not on a programmatic `CopyFromScreen`,
   so a capture script can launch it, wait, grab, and kill it.
+
+## Stream Deck presses are SMTC API calls, not key events (2026-06-11)
+
+The Cover Tile action's media controls go through SMTC WinRT calls
+(`TryTogglePlayPauseAsync` etc.) straight to the media app; only volume (and
+SMTC-refused fallbacks) inject real keys via `SendInput`. An API call between
+two other processes produces NO keyboard message, so the screensaver's WndProc
+can never "see" a deck press — there is nothing to intercept.
+
+**Fix:** named-event handshake `Local\AlbumArtScreenSaver.Dismiss` in the shared
+`ScreenSaver/DismissSignal.cs` (compiled into both the saver and the plugin via
+`Compile Include` link, same pattern as `NowPlayingMonitor.cs`). The saver
+creates + listens (`/s` branch of Program.cs, exit marshalled through the first
+form's `BeginInvoke`); the plugin's `KeyPressed` opens/sets/closes the event
+before executing the media action. Open-set-close per press is deliberate — a
+cached handle would keep the kernel object alive signaled after the saver dies
+and instantly dismiss the next launch.
+
+Related: the saver's WndProc must NOT swallow WM_KEYDOWN/WM_APPCOMMAND when
+dismissing — pass to `base.WndProc` so genuine media/volume keys keep their
+system action (volume OSD, play/pause) on the way out.

@@ -38,6 +38,7 @@
       Reuse the screensaver's SMTC monitor verbatim - keeps a single source of truth.
     -->
     <Compile Include="..\ScreenSaver\NowPlayingMonitor.cs" Link="NowPlayingMonitor.cs" />
+    <Compile Include="..\ScreenSaver\DismissSignal.cs" Link="DismissSignal.cs" />
   </ItemGroup>
 
   <ItemGroup>

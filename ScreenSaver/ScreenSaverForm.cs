@@ -756,8 +756,10 @@ namespace ScreenSaver
             if (!m_bPreviewMode &&
                 (m.Msg == WM_KEYDOWN || m.Msg == WM_SYSKEYDOWN || m.Msg == WM_APPCOMMAND))
             {
+                // Tear down, but still hand the message to DefWindowProc so media /
+                // volume keys keep their system action (play/pause, volume OSD) on
+                // the way out instead of being swallowed by the dying saver.
                 Application.Exit();
-                return;
             }
 
             base.WndProc(ref m);
