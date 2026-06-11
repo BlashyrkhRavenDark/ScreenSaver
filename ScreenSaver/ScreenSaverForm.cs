@@ -507,6 +507,7 @@ namespace ScreenSaver
             m_bFeatureVisible = info.Cover != null;
 
             RefreshHighlights();
+            if (m_bManageMode) UpdateHoverText(); // track change under a hovering cursor
             Invalidate(FeatureRect());
         }
 
@@ -518,6 +519,7 @@ namespace ScreenSaver
             Rectangle fr = FeatureRect();
             m_bFeatureVisible = false;
             RefreshHighlights();
+            if (m_bManageMode) UpdateHoverText(); // fall back to the tile beneath
             Invalidate(fr); // repaint the 4 central tiles now that the cover is gone
         }
 
@@ -574,19 +576,28 @@ namespace ScreenSaver
             Invalidate();
         }
 
-        /// <summary>Refresh the "Artist — Album" line for the tile under the cursor.
-        /// Runs on mouse moves and whenever a swap changes the cover beneath it.</summary>
+        /// <summary>Refresh the hover line for whatever is under the cursor: the
+        /// feature (now-playing / pinned) cover when over its 2x2 block, otherwise
+        /// the mosaic tile. Runs on mouse moves and whenever a swap or now-playing
+        /// change alters the cover beneath the cursor.</summary>
         private void UpdateHoverText()
         {
             string text = string.Empty;
-            if (m_bManageMode && !mouseLocation.IsEmpty && TileAt(mouseLocation, out int x, out int y))
+            if (m_bManageMode && !mouseLocation.IsEmpty)
             {
-                string key = m_aTileKeys[x, y];
-                if (!string.IsNullOrEmpty(key))
+                // The feature cover sits over the mosaic; hovering it should describe
+                // the featured album, not the four tiles hidden beneath it.
+                if (m_bFeatureVisible && FeatureRect().Contains(mouseLocation))
+                    text = BuildFeatureHoverText();
+                else if (TileAt(mouseLocation, out int x, out int y))
                 {
-                    var meta = m_oCoverMgr?.GetMetadata(key);
-                    if (!string.IsNullOrEmpty(meta?.Artist) || !string.IsNullOrEmpty(meta?.Album))
-                        text = JoinDash(meta.Artist, meta.Album);
+                    string key = m_aTileKeys[x, y];
+                    if (!string.IsNullOrEmpty(key))
+                    {
+                        var meta = m_oCoverMgr?.GetMetadata(key);
+                        if (!string.IsNullOrEmpty(meta?.Artist) || !string.IsNullOrEmpty(meta?.Album))
+                            text = JoinDash(meta.Artist, meta.Album);
+                    }
                 }
             }
             if (!string.Equals(text, m_sHoverText, StringComparison.Ordinal))
@@ -594,6 +605,20 @@ namespace ScreenSaver
                 m_sHoverText = text;
                 if (m_bManageHintVisible) Invalidate(HintArea());
             }
+        }
+
+        /// <summary>"Artist — Album — Title" for the feature cover: the full
+        /// now-playing info, or the pinned album's metadata when pinned.</summary>
+        private string BuildFeatureHoverText()
+        {
+            if (m_bPinned)
+            {
+                var meta = m_oCoverMgr?.GetMetadata(m_sPinnedKey);
+                return JoinDash(meta?.Artist, meta?.Album);
+            }
+            var info = m_oNowPlaying?.Current;
+            if (info == null) return string.Empty;
+            return JoinDash(JoinDash(info.Artist, info.Album), info.Title);
         }
 
         /// <summary>Top strip holding the manage hint and the info line below it.</summary>
