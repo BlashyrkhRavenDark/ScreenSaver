@@ -1,11 +1,17 @@
 {
   "Author": "Ant",
   "CodePath": "com.blashyrkh.screensaver.exe",
-  "Description": "Mirrors the currently-playing album cover to a single Stream Deck key, or spreads one cover across 4 (2x2) or 9 (3x3) keys. Each key gets its own configurable action: play/pause, next, previous, stop, volume +/-, or mute.",
+  "Description": "Mirrors the currently-playing album cover to a single Stream Deck key, or spreads one cover across 4 (2x2) or 9 (3x3) keys. Each key gets its own configurable action: play/pause, next, previous, stop, volume +/-, mute, or next/previous page (within the bundled Covers profiles).",
   "Name": "ScreenSaver Cover Tile",
   "Icon": "icons/plugin",
   "URL": "https://github.com/BlashyrkhRavenDark/ScreenSaver",
-  "Version": "1.0.0",
+  "Version": "1.1.0",
+  "Profiles": [
+    { "Name": "Covers 1", "DeviceType": 0, "Readonly": false, "DontAutoSwitchWhenInstalled": true },
+    { "Name": "Covers 2", "DeviceType": 0, "Readonly": false, "DontAutoSwitchWhenInstalled": true },
+    { "Name": "Covers 3", "DeviceType": 0, "Readonly": false, "DontAutoSwitchWhenInstalled": true },
+    { "Name": "Covers 4", "DeviceType": 0, "Readonly": false, "DontAutoSwitchWhenInstalled": true }
+  ],
   "SDKVersion": 2,
   "Software": {
     "MinimumVersion": "6.5"

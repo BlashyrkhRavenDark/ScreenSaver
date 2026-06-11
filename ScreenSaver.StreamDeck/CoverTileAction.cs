@@ -34,8 +34,19 @@ namespace ScreenSaver.StreamDeck
             VolumeUp,
             VolumeDown,
             Mute,
-            Stop
+            Stop,
+            NextPage,
+            PreviousPage
         }
+
+        // "Page" navigation: the SDK only lets a plugin switch to profiles bundled
+        // with the plugin, never to pages of a user profile. Pages are therefore
+        // modeled as the bundled single-page profiles "Covers 1".."Covers 4"
+        // (shipped in sdPlugin\, declared in manifest.json). A pager key knows
+        // which Covers page it sits on (the PI's "On page" setting) and jumps to
+        // its neighbour, wrapping around at the ends.
+        private const int COVERS_PAGE_COUNT = 4;
+        private const string COVERS_PROFILE_PREFIX = "Covers ";
 
         private class TileSettings
         {
@@ -46,6 +57,9 @@ namespace ScreenSaver.StreamDeck
             // Whether to stamp the on-press action badge in the lower-left corner.
             // Off lets the artwork fill the whole key with nothing overlaid.
             public bool ShowActionIcon = true;
+            // Which "Covers N" page this key sits on (1-based); only meaningful
+            // for the NextPage / PreviousPage actions.
+            public int Page = 1;
 
             public static TileSettings FromPayload(JObject settings)
             {
@@ -56,6 +70,7 @@ namespace ScreenSaver.StreamDeck
                 t.Column = Clamp(settings.Value<int?>("column") ?? 0, 0, t.GridSize - 1);
                 Enum.TryParse(settings.Value<string>("action") ?? "PlayPause", true, out t.Action);
                 t.ShowActionIcon = settings.Value<bool?>("showActionIcon") ?? true;
+                t.Page = Clamp(settings.Value<int?>("page") ?? 1, 1, COVERS_PAGE_COUNT);
                 return t;
             }
 
@@ -67,7 +82,8 @@ namespace ScreenSaver.StreamDeck
                     ["row"] = Row,
                     ["column"] = Column,
                     ["action"] = Action.ToString(),
-                    ["showActionIcon"] = ShowActionIcon
+                    ["showActionIcon"] = ShowActionIcon,
+                    ["page"] = Page
                 };
             }
 
@@ -223,6 +239,8 @@ namespace ScreenSaver.StreamDeck
                 KeyAction.VolumeUp   => "", // Volume3
                 KeyAction.VolumeDown => "", // Volume1
                 KeyAction.Mute       => "", // Mute
+                KeyAction.NextPage     => "", // ChevronRight
+                KeyAction.PreviousPage => "", // ChevronLeft
                 _ => null
             };
             if (glyph == null) return;
@@ -259,12 +277,18 @@ namespace ScreenSaver.StreamDeck
             return path;
         }
 
-        private static async Task ExecuteActionAsync(KeyAction action)
+        private async Task ExecuteActionAsync(KeyAction action)
         {
             var monitor = CoverMonitorHost.Instance;
             switch (action)
             {
                 case KeyAction.None:
+                    return;
+                case KeyAction.NextPage:
+                    await SwitchCoversPageAsync(+1);
+                    return;
+                case KeyAction.PreviousPage:
+                    await SwitchCoversPageAsync(-1);
                     return;
                 case KeyAction.PlayPause:
                     // SMTC first; if the session refuses, fall back to the global media key.
@@ -293,6 +317,16 @@ namespace ScreenSaver.StreamDeck
                     MediaKeys.Press(MediaKeys.VK_VOLUME_MUTE);
                     return;
             }
+        }
+
+        /// <summary>Jump to the neighbouring bundled "Covers N" profile (the
+        /// plugin's stand-in for pages), wrapping around at the ends.</summary>
+        private async Task SwitchCoversPageAsync(int direction)
+        {
+            int target = m_oSettings.Page + direction;
+            if (target < 1) target = COVERS_PAGE_COUNT;
+            if (target > COVERS_PAGE_COUNT) target = 1;
+            await Connection.SwitchProfileAsync(COVERS_PROFILE_PREFIX + target);
         }
     }
 

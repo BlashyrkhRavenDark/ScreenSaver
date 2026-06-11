@@ -114,6 +114,20 @@
           <option value="VolumeUp">Volume up</option>
           <option value="VolumeDown">Volume down</option>
           <option value="Mute">Mute toggle</option>
+          <option value="NextPage">Next page (Covers profiles)</option>
+          <option value="PreviousPage">Previous page (Covers profiles)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sdpi-item" id="pageRow" style="display:none">
+      <div class="sdpi-item-label">On page</div>
+      <div class="sdpi-item-value">
+        <select id="page">
+          <option value="1">Covers 1</option>
+          <option value="2">Covers 2</option>
+          <option value="3">Covers 3</option>
+          <option value="4">Covers 4</option>
         </select>
       </div>
     </div>
@@ -130,6 +144,9 @@
       Drop the same action on multiple keys to spread one album cover across them.
       For a 3 x 3 cover wall, use 9 keys with grid size 3 and pick row 0&ndash;2 / column 0&ndash;2 for each.
       Each key can do its own thing on press &ndash; mix and match next, previous, volume, mute.
+      The page actions only work inside the plugin's bundled &quot;Covers 1&ndash;4&quot; profiles
+      (Stream Deck doesn't let plugins flip pages of personal profiles) &ndash; set
+      &quot;On page&quot; to the Covers profile this key lives in.
     </p>
 
   </div>
@@ -137,7 +154,7 @@
   <script>
     let websocket = null;
     let pluginUUID = null;
-    let settings = { gridSize: 1, row: 0, column: 0, action: 'PlayPause', showActionIcon: true };
+    let settings = { gridSize: 1, row: 0, column: 0, action: 'PlayPause', showActionIcon: true, page: 1 };
 
     function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
       pluginUUID = inUUID;
@@ -149,7 +166,8 @@
           row: parseInt(s.row) || 0,
           column: parseInt(s.column) || 0,
           action: s.action || 'PlayPause',
-          showActionIcon: s.showActionIcon !== false
+          showActionIcon: s.showActionIcon !== false,
+          page: parseInt(s.page) || 1
         };
       }
 
@@ -195,19 +213,32 @@
       }
     }
 
+    function updatePageRowVisibility() {
+      const isPager = settings.action === 'NextPage' || settings.action === 'PreviousPage';
+      document.getElementById('pageRow').style.display = isPager ? 'flex' : 'none';
+    }
+
     function hydrateUI() {
       const gridSel = document.getElementById('gridSize');
       const rowSel = document.getElementById('row');
       const colSel = document.getElementById('column');
       const actSel = document.getElementById('action');
       const iconChk = document.getElementById('showActionIcon');
+      const pageSel = document.getElementById('page');
 
       gridSel.value = String(settings.gridSize);
       populateOptions(rowSel, settings.gridSize, settings.row);
       populateOptions(colSel, settings.gridSize, settings.column);
       actSel.value = settings.action;
       iconChk.checked = settings.showActionIcon;
+      pageSel.value = String(settings.page);
+      updatePageRowVisibility();
       renderPreview();
+
+      pageSel.addEventListener('change', () => {
+        settings.page = parseInt(pageSel.value);
+        persist();
+      });
 
       gridSel.addEventListener('change', () => {
         settings.gridSize = parseInt(gridSel.value);
@@ -234,6 +265,7 @@
 
       actSel.addEventListener('change', () => {
         settings.action = actSel.value;
+        updatePageRowVisibility();
         persist();
       });
 
