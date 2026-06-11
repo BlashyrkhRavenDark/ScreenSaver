@@ -106,10 +106,6 @@ namespace ScreenSaver.StreamDeck
 
         public override async void KeyPressed(KeyPayload payload)
         {
-            // Our media controls are SMTC API calls, not key events, so a running
-            // screensaver never sees a deck press - tell it to dismiss explicitly.
-            // The media action still executes either way.
-            global::ScreenSaver.DismissSignal.Dismiss();
             await ExecuteActionAsync(m_oSettings.Action);
         }
 

@@ -82,8 +82,7 @@ namespace ScreenSaver
                 else if (sFirstArg == "/s")
                 {
                     DiagLog.Write("Branch /s: enumerating screens");
-                    Form oAnchor = ShowScreenSaver(oCoverMgr, oNowPlaying);
-                    StartDismissListener(oAnchor);
+                    ShowScreenSaver(oCoverMgr, oNowPlaying);
                     DiagLog.Write("All screensaver forms shown; entering Application.Run");
                     Application.Run();
                     DiagLog.Write("Application.Run returned");
@@ -107,12 +106,9 @@ namespace ScreenSaver
         /// Display the form on each of the computer's monitors. All forms share the
         /// same AlbumCoverMgr and NowPlayingMonitor instances so SMTC isn't queried
         /// once per screen and so cover lookups stay cache-coherent.
-        /// Returns the first successfully-shown form (used to marshal cross-thread
-        /// dismiss requests onto the UI thread), or null if every screen failed.
         /// </summary>
-        static Form ShowScreenSaver(AlbumCoverMgr p_oCoverMgr, NowPlayingMonitor p_oNowPlaying)
+        static void ShowScreenSaver(AlbumCoverMgr p_oCoverMgr, NowPlayingMonitor p_oNowPlaying)
         {
-            Form oFirst = null;
             int idx = 0;
             foreach (Screen oScreen in Screen.AllScreens)
             {
@@ -123,41 +119,12 @@ namespace ScreenSaver
                     DiagLog.Write("  screen[" + idx + "] form ctor OK, calling Show()");
                     oScreensaver.Show();
                     DiagLog.Write("  screen[" + idx + "] Show() returned; Visible=" + oScreensaver.Visible + " Handle=" + oScreensaver.Handle);
-                    if (oFirst == null) oFirst = oScreensaver;
                 }
                 catch (Exception ex)
                 {
                     DiagLog.WriteError("  screen[" + idx + "] failed", ex);
                 }
                 idx++;
-            }
-            return oFirst;
-        }
-
-        // Keeps the named dismiss event alive for the saver's lifetime.
-        private static System.Threading.EventWaitHandle s_oDismissEvent;
-
-        /// <summary>
-        /// Listen for the companion dismiss signal (Stream Deck plugin). Deck media
-        /// controls go through SMTC API calls - not key events - so without this the
-        /// saver never notices a deck press. The signal arrives on a thread-pool
-        /// thread; Application.Exit is marshalled through the anchor form.
-        /// </summary>
-        static void StartDismissListener(Form p_oAnchor)
-        {
-            if (p_oAnchor == null) return;
-            try
-            {
-                s_oDismissEvent = DismissSignal.Listen(() =>
-                {
-                    DiagLog.Write("Dismiss signal received from companion (deck press)");
-                    try { p_oAnchor.BeginInvoke(new Action(Application.Exit)); }
-                    catch { /* form already gone - the saver is exiting anyway */ }
-                });
-            }
-            catch (Exception ex)
-            {
-                DiagLog.WriteError("StartDismissListener", ex);
             }
         }
 

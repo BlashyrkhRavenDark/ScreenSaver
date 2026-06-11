@@ -66,17 +66,18 @@ The Cover Tile action's media controls go through SMTC WinRT calls
 (`TryTogglePlayPauseAsync` etc.) straight to the media app; only volume (and
 SMTC-refused fallbacks) inject real keys via `SendInput`. An API call between
 two other processes produces NO keyboard message, so the screensaver's WndProc
-can never "see" a deck press — there is nothing to intercept.
+can never "see" a deck transport press — there is nothing to intercept, and
+the media control itself works fine while the saver is up.
 
-**Fix:** named-event handshake `Local\AlbumArtScreenSaver.Dismiss` in the shared
-`ScreenSaver/DismissSignal.cs` (compiled into both the saver and the plugin via
-`Compile Include` link, same pattern as `NowPlayingMonitor.cs`). The saver
-creates + listens (`/s` branch of Program.cs, exit marshalled through the first
-form's `BeginInvoke`); the plugin's `KeyPressed` opens/sets/closes the event
-before executing the media action. Open-set-close per press is deliberate — a
-cached handle would keep the kernel object alive signaled after the saver dies
-and instantly dismiss the next launch.
+**Decision (operator, 2026-06-11): do NOT bridge this with IPC.** A named-event
+dismiss handshake (`DismissSignal.cs` shared into both projects; saver listens,
+plugin signals on KeyPressed) was implemented in 5a8041e and removed the same
+day at the operator's request — the project must stay simple, no extra
+process-coordination layer on top of the existing helper apps. Accepted
+consequence: deck transport presses (play/next/prev/stop via SMTC) control the
+music but do NOT dismiss the screensaver; mouse, keyboard, and the deck's
+volume/fallback keys (real injected keys) remain the dismissal triggers.
 
-Related: the saver's WndProc must NOT swallow WM_KEYDOWN/WM_APPCOMMAND when
-dismissing — pass to `base.WndProc` so genuine media/volume keys keep their
-system action (volume OSD, play/pause) on the way out.
+Related (kept): the saver's WndProc must NOT swallow WM_KEYDOWN/WM_APPCOMMAND
+when dismissing — pass to `base.WndProc` so genuine media/volume keys keep
+their system action (volume OSD, play/pause) on the way out.
