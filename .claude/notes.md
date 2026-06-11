@@ -81,3 +81,23 @@ volume/fallback keys (real injected keys) remain the dismissal triggers.
 Related (kept): the saver's WndProc must NOT swallow WM_KEYDOWN/WM_APPCOMMAND
 when dismissing — pass to `base.WndProc` so genuine media/volume keys keep
 their system action (volume OSD, play/pause) on the way out.
+
+## Saver was denied keyboard focus → keys never reached it (2026-06-11)
+
+The "deck keys do nothing while the saver is on" report was a FOCUS bug, not a
+key-routing one. A saver launched indirectly (System32 stub → App, or any
+background/programmatic launch) is denied foreground by the SetForegroundWindow
+rules, so the previously focused app silently keeps receiving every key —
+keyboard AND injected media/volume keys. Mouse still worked (routed by
+position), which masked the problem.
+
+**Fix:** `ScreenSaverForm.OnShown` grabs focus via the AttachThreadInput trick
+(attach to the current foreground thread's input queue, SetForegroundWindow +
+Activate, detach). DiagLog writes "keyboard focus acquired / NOT acquired".
+
+**Verification recipe (no deck needed):** launch the saver, then inject a key
+the way the plugin does. BitDefender AMSI blocks a .ps1 containing SendInput
+P/Invoke ("malicious content"), but COM SendKeys is allowed and equivalent:
+`(New-Object -ComObject WScript.Shell).SendKeys('{F15}')` — F15 = real key
+event, no system side effect. Saver process gone after = pass. Test BOTH the
+direct App launch and the System32 stub launch.

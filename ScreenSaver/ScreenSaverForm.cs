@@ -38,6 +38,21 @@ namespace ScreenSaver
         [DllImport("user32.dll")]
         static extern bool GetClientRect(IntPtr hWnd, out Rectangle lpRect);
 
+        [DllImport("user32.dll")]
+        static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("kernel32.dll")]
+        static extern uint GetCurrentThreadId();
+
+        [DllImport("user32.dll")]
+        static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
         #endregion
 
         private const int DEFAULT_TARGET_TILE_PX = 256;
@@ -260,6 +275,43 @@ namespace ScreenSaver
         {
             int transitionMs = m_oEffect == TransitionEffect.Blink ? 0 : m_iTransitionDurationMs;
             return Math.Max(100, m_iGapBetweenTransitionsMs + transitionMs);
+        }
+
+        /// <summary>
+        /// Take keyboard focus once visible. A saver launched indirectly (System32
+        /// stub -> app, or a programmatic test launch) is denied foreground by the
+        /// SetForegroundWindow rules, so the previously focused app keeps receiving
+        /// every key - neither the keyboard nor injected media/volume keys (Stream
+        /// Deck) can dismiss the saver. Attaching to the current foreground thread's
+        /// input queue lifts that restriction.
+        /// </summary>
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            if (m_bPreviewMode) return;
+            try
+            {
+                IntPtr fg = GetForegroundWindow();
+                if (fg == Handle) return;
+                uint fgThread = fg != IntPtr.Zero ? GetWindowThreadProcessId(fg, out _) : 0;
+                uint myThread = GetCurrentThreadId();
+                bool attached = fgThread != 0 && fgThread != myThread && AttachThreadInput(myThread, fgThread, true);
+                try
+                {
+                    SetForegroundWindow(Handle);
+                    Activate();
+                }
+                finally
+                {
+                    if (attached) AttachThreadInput(myThread, fgThread, false);
+                }
+                DiagLog.Write("OnShown: keyboard focus " +
+                    (GetForegroundWindow() == Handle ? "acquired" : "NOT acquired (still elsewhere)"));
+            }
+            catch (Exception ex)
+            {
+                DiagLog.WriteError("OnShown focus grab", ex);
+            }
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
