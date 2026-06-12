@@ -124,7 +124,34 @@ namespace ScreenSaver.StreamDeck
         {
             Logger.Instance.LogMessage(TracingLevel.INFO,
                 $"KeyPressed: action={m_oSettings.Action} page={m_oSettings.Page}");
+            DismissScreenSaver();
             await ExecuteActionAsync(m_oSettings.Action);
+        }
+
+        /// <summary>
+        /// A deck press can never reach the screensaver on its own: SMTC successes
+        /// are API calls, and even the injected VK_MEDIA_* fallbacks are routed by
+        /// Windows' SMTC service straight to the media app, bypassing the focused
+        /// window (verified: VK_VOLUME_MUTE arrives as WM_KEYDOWN, VK_MEDIA_* never
+        /// does). So when a saver process is up, poke it with one harmless real key
+        /// (F15, no system action) through the normal input path - the saver
+        /// dismisses on any key. No-op when the saver isn't running.
+        /// </summary>
+        private static void DismissScreenSaver()
+        {
+            try
+            {
+                var procs = System.Diagnostics.Process.GetProcessesByName("ScreenSaver");
+                bool running = procs.Length > 0;
+                foreach (var p in procs) p.Dispose();
+                if (!running) return;
+                Logger.Instance.LogMessage(TracingLevel.INFO, "Saver running - injecting F15 to dismiss");
+                MediaKeys.Press(MediaKeys.VK_F15);
+            }
+            catch
+            {
+                // Best effort - the media action below still runs.
+            }
         }
 
         public override void KeyReleased(KeyPayload payload) { }

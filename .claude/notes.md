@@ -126,3 +126,23 @@ install the bundled profiles — the prompt is expected on the FIRST
 switchToProfile call (first pager-key press). Do NOT tell the user to
 double-click a .streamDeckProfile file: that imports it as a *user* profile,
 which the plugin is forbidden to switch to.
+
+## VK_MEDIA_* never reaches the focused window — F15 poke (2026-06-12)
+
+Log-verified correction to the two 2026-06-11 notes above: even the plugin's
+*injected* `VK_MEDIA_*` fallback keys never reach the screensaver, because
+Windows' SMTC service intercepts media-transport keys system-wide and hands
+them to the media app directly (same press session: `VK_VOLUME_MUTE` arrived
+at the saver as `WM_KEYDOWN 0xAD` and dismissed it; four `VK_MEDIA_PLAY_PAUSE`
+and two `VK_MEDIA_NEXT_TRACK` never produced any saver message). Volume keys
+take the normal input path; transport keys do not. Also: the operator's player
+refuses SMTC control (`TryTogglePlayPauseAsync` returns false), so transport
+actions ALWAYS use the injected-key fallback.
+
+**Fix that finally works (kept deliberately tiny, no IPC):** on every deck
+KeyPressed, if a `ScreenSaver` process exists, the plugin injects `VK_F15`
+(0x7E — real key event, no system action) before running the media action.
+F15 rides the normal input path to the focused saver, which dismisses on any
+key. No saver running → no injection, zero side effects. This supersedes the
+"deck transport presses do NOT dismiss the screensaver" consequence noted
+above.

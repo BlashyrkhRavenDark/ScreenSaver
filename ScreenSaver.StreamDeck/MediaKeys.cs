@@ -13,6 +13,11 @@ namespace ScreenSaver.StreamDeck
     /// </summary>
     internal static class MediaKeys
     {
+        // F15: a real key event with no system action on Windows - used to poke
+        // the screensaver awake through the normal input path (it dismisses on
+        // any key), without side effects when pressed anywhere else.
+        public const ushort VK_F15 = 0x7E;
+
         public const ushort VK_VOLUME_MUTE = 0xAD;
         public const ushort VK_VOLUME_DOWN = 0xAE;
         public const ushort VK_VOLUME_UP = 0xAF;
