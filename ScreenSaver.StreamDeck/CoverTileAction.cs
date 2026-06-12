@@ -122,6 +122,8 @@ namespace ScreenSaver.StreamDeck
 
         public override async void KeyPressed(KeyPayload payload)
         {
+            Logger.Instance.LogMessage(TracingLevel.INFO,
+                $"KeyPressed: action={m_oSettings.Action} page={m_oSettings.Page}");
             await ExecuteActionAsync(m_oSettings.Action);
         }
 
@@ -293,19 +295,35 @@ namespace ScreenSaver.StreamDeck
                 case KeyAction.PlayPause:
                     // SMTC first; if the session refuses, fall back to the global media key.
                     if (!await monitor.TryTogglePlayPauseAsync())
+                    {
+                        Logger.Instance.LogMessage(TracingLevel.INFO, "PlayPause: SMTC refused, injecting media key");
                         MediaKeys.Press(MediaKeys.VK_MEDIA_PLAY_PAUSE);
+                    }
+                    else Logger.Instance.LogMessage(TracingLevel.INFO, "PlayPause: SMTC ok");
                     return;
                 case KeyAction.Next:
                     if (!await monitor.TrySkipNextAsync())
+                    {
+                        Logger.Instance.LogMessage(TracingLevel.INFO, "Next: SMTC refused, injecting media key");
                         MediaKeys.Press(MediaKeys.VK_MEDIA_NEXT_TRACK);
+                    }
+                    else Logger.Instance.LogMessage(TracingLevel.INFO, "Next: SMTC ok");
                     return;
                 case KeyAction.Previous:
                     if (!await monitor.TrySkipPreviousAsync())
+                    {
+                        Logger.Instance.LogMessage(TracingLevel.INFO, "Previous: SMTC refused, injecting media key");
                         MediaKeys.Press(MediaKeys.VK_MEDIA_PREV_TRACK);
+                    }
+                    else Logger.Instance.LogMessage(TracingLevel.INFO, "Previous: SMTC ok");
                     return;
                 case KeyAction.Stop:
                     if (!await monitor.TryStopAsync())
+                    {
+                        Logger.Instance.LogMessage(TracingLevel.INFO, "Stop: SMTC refused, injecting media key");
                         MediaKeys.Press(MediaKeys.VK_MEDIA_STOP);
+                    }
+                    else Logger.Instance.LogMessage(TracingLevel.INFO, "Stop: SMTC ok");
                     return;
                 case KeyAction.VolumeUp:
                     MediaKeys.Press(MediaKeys.VK_VOLUME_UP);
@@ -326,6 +344,8 @@ namespace ScreenSaver.StreamDeck
             int target = m_oSettings.Page + direction;
             if (target < 1) target = COVERS_PAGE_COUNT;
             if (target > COVERS_PAGE_COUNT) target = 1;
+            Logger.Instance.LogMessage(TracingLevel.INFO,
+                $"SwitchCoversPage: from={m_oSettings.Page} to={target}");
             await Connection.SwitchProfileAsync(COVERS_PROFILE_PREFIX + target);
         }
     }
