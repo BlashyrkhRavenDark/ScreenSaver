@@ -26,6 +26,10 @@ namespace ScreenSaver
             public string Artist;
             public string Album;
             public Image Cover;
+            // Source of this info: true = iTunes (COM poll / IPC file), false = SMTC
+            // (Spotify, Apple Music, browsers, ...). The Stream Deck plugin mirrors
+            // iTunes only; the screensaver shows whatever is playing regardless.
+            public bool FromItunes;
         }
 
         /// <summary>
@@ -496,12 +500,14 @@ namespace ScreenSaver
 
         private void ApplySmtcUpdate(NowPlayingInfo info)
         {
+            if (info != null) info.FromItunes = false;
             m_oLastSmtcInfo = info;
             RecomputeAndRaise();
         }
 
         private void ApplyItunesUpdate(NowPlayingInfo info)
         {
+            if (info != null) info.FromItunes = true;
             m_oLastItunesInfo = info;
             RecomputeAndRaise();
         }

@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using BarRaider.SdTools;
 using Newtonsoft.Json.Linq;
@@ -129,30 +131,69 @@ namespace ScreenSaver.StreamDeck
         }
 
         /// <summary>
-        /// A deck press can never reach the screensaver on its own: SMTC successes
-        /// are API calls, and even the injected VK_MEDIA_* fallbacks are routed by
-        /// Windows' SMTC service straight to the media app, bypassing the focused
-        /// window (verified: VK_VOLUME_MUTE arrives as WM_KEYDOWN, VK_MEDIA_* never
-        /// does). So when a saver process is up, poke it with one harmless real key
-        /// (F15, no system action) through the normal input path - the saver
-        /// dismisses on any key. No-op when the saver isn't running.
+        /// Dismiss a running screensaver from the plugin's process. A deck press can
+        /// never reach the saver through the input system: SMTC successes are API
+        /// calls, injected VK_MEDIA_* keys are grabbed system-wide by the SMTC
+        /// service, and even a plain injected key (SendInput) only lands if the saver
+        /// is the FOREGROUND window - which it routinely is NOT a few seconds after
+        /// launch (Windows focus-stealing prevention, the volume OSD, multi-monitor).
+        /// That cost us a field regression where injected F15 never arrived.
+        ///
+        /// So don't inject and hope: post a key-down DIRECTLY to each of the saver's
+        /// top-level windows. PostMessage ignores focus, and the saver's WndProc
+        /// already exits on any WM_KEYDOWN. Same-integrity processes, so UIPI allows
+        /// it. No-op when no saver is running.
         /// </summary>
         private static void DismissScreenSaver()
         {
             try
             {
-                var procs = System.Diagnostics.Process.GetProcessesByName("ScreenSaver");
-                bool running = procs.Length > 0;
-                foreach (var p in procs) p.Dispose();
-                if (!running) return;
-                Logger.Instance.LogMessage(TracingLevel.INFO, "Saver running - injecting F15 to dismiss");
-                MediaKeys.Press(MediaKeys.VK_F15);
+                var pids = new HashSet<uint>();
+                foreach (var p in System.Diagnostics.Process.GetProcessesByName("ScreenSaver"))
+                {
+                    pids.Add((uint)p.Id);
+                    p.Dispose();
+                }
+                if (pids.Count == 0) return;
+
+                int posted = 0;
+                EnumWindows((hWnd, lParam) =>
+                {
+                    GetWindowThreadProcessId(hWnd, out uint wpid);
+                    if (pids.Contains(wpid) && IsWindowVisible(hWnd))
+                    {
+                        PostMessage(hWnd, WM_KEYDOWN, (IntPtr)VK_F15, IntPtr.Zero);
+                        posted++;
+                    }
+                    return true; // keep enumerating
+                }, IntPtr.Zero);
+                Logger.Instance.LogMessage(TracingLevel.INFO,
+                    $"Saver running - posted dismiss key to {posted} window(s)");
             }
             catch
             {
                 // Best effort - the media action below still runs.
             }
         }
+
+        #region Win32 - dismiss the screensaver by posting to its window(s)
+        private const uint WM_KEYDOWN = 0x0100;
+        private const int VK_F15 = 0x7E; // a real key with no system action
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+        #endregion
 
         public override void KeyReleased(KeyPayload payload) { }
 
@@ -181,6 +222,11 @@ namespace ScreenSaver.StreamDeck
             // No cover to show right now (track without art, or nothing playing):
             // keep whatever was last painted so the deck never blanks. See OnCleared.
             if (info == null || info.Cover == null) return;
+
+            // The deck mirrors iTunes ONLY. Ignore every other media source
+            // (Spotify, browsers, Apple Music, anything on SMTC) - the artwork on
+            // the keys must never come from anything but iTunes.
+            if (!info.FromItunes) return;
 
             // Cache key: cover identity + this tile's crop parameters + the action
             // and whether its badge is shown (so the tile updates when the user

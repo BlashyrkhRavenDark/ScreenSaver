@@ -146,3 +146,36 @@ F15 rides the normal input path to the focused saver, which dismisses on any
 key. No saver running → no injection, zero side effects. This supersedes the
 "deck transport presses do NOT dismiss the screensaver" consequence noted
 above.
+
+## F15 SendInput also failed (focus) → PostMessage to the saver's window (2026-06-16)
+
+The F15-poke fix above was ALSO unreliable and regressed in the field: log
+showed the plugin injected F15 on four mute presses ("Saver running - injecting
+F15...") yet the saver logged NO `WndProc dismiss` — the saver had grabbed
+focus at launch (23:11:51) but was no longer the foreground window by the press
+(23:11:55). SendInput only lands on the FOREGROUND window; Windows
+focus-stealing prevention / the volume OSD / multi-monitor routinely take
+foreground away from the saver seconds after it starts. So injected keys
+(F15 or VK_VOLUME_MUTE alike) are a coin-flip.
+
+**Fix that is actually focus-independent:** the plugin's `DismissScreenSaver`
+now enumerates the `ScreenSaver` process's visible top-level windows
+(EnumWindows + GetWindowThreadProcessId, match by PID) and `PostMessage`s
+`WM_KEYDOWN VK_F15` straight to each. PostMessage queues to the target window
+regardless of focus; the saver's existing WndProc exits on any WM_KEYDOWN.
+Same-integrity processes so UIPI permits it. NO saver-side change, NO IPC
+handshake. Verified with a compiled probe that launched the saver, let
+**LockApp** take foreground (saver definitely not foreground), posted, and the
+saver exited cleanly (`saver procs after: 0`). This supersedes the F15-SendInput
+note above.
+
+## Stream Deck shows iTunes covers ONLY (2026-06-16)
+
+Operator wants the deck to mirror iTunes artwork and absolutely nothing else
+(no Spotify/browser/other SMTC source). `NowPlayingInfo` now carries a
+`FromItunes` flag (set in `ApplyItunesUpdate`=true / `ApplySmtcUpdate`=false);
+the plugin's `OnUpdated` early-returns unless `FromItunes`. The screensaver is
+unaffected — it still shows whatever is playing. iTunes data reaches the deck
+only via the Tray's `nowplaying.json`/`png` IPC (the plugin is a file-watcher,
+not an iTunes poller), so the **Tray must be running** for the deck to show
+anything; verify it (and iTunes) before assuming the filter is broken.
