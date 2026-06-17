@@ -31,6 +31,8 @@
 
   <ItemGroup>
     <PackageReference Include="DiscordRichPresence" Version="1.3.0.28" />
+    <!-- Raw-HID Stream Deck control for the lock-screen display (LockScreenDeck). -->
+    <PackageReference Include="StreamDeckSharp" Version="6.1.0" />
   </ItemGroup>
 
   <ItemGroup>

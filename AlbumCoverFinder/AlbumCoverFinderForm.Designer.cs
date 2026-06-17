@@ -24,6 +24,7 @@ namespace AlbumCoverFinder
             this.tabDisplay = new System.Windows.Forms.TabPage();
             this.tabWallpaper = new System.Windows.Forms.TabPage();
             this.tabLockScreen = new System.Windows.Forms.TabPage();
+            this.tabDeckLock = new System.Windows.Forms.TabPage();
 
             // Display tab controls
             this.lCoversWide = new System.Windows.Forms.Label();
@@ -88,6 +89,15 @@ namespace AlbumCoverFinder
             this.bLockScreenSave = new System.Windows.Forms.Button();
             this.lLockScreenHint = new System.Windows.Forms.Label();
 
+            // Stream Deck lock tab controls
+            this.lDeckLockMode = new System.Windows.Forms.Label();
+            this.cbDeckLockMode = new System.Windows.Forms.ComboBox();
+            this.tDeckLockPath = new System.Windows.Forms.TextBox();
+            this.bDeckLockBrowse = new System.Windows.Forms.Button();
+            this.bDeckLockSave = new System.Windows.Forms.Button();
+            this.lDeckLockHint = new System.Windows.Forms.Label();
+            this.openDeckImageDialog = new System.Windows.Forms.OpenFileDialog();
+
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nAlbumCap)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nYearMin)).BeginInit();
@@ -104,6 +114,7 @@ namespace AlbumCoverFinder
             this.tabDisplay.SuspendLayout();
             this.tabWallpaper.SuspendLayout();
             this.tabLockScreen.SuspendLayout();
+            this.tabDeckLock.SuspendLayout();
             this.SuspendLayout();
 
             //
@@ -133,6 +144,7 @@ namespace AlbumCoverFinder
             this.tabs.Controls.Add(this.tabDisplay);
             this.tabs.Controls.Add(this.tabWallpaper);
             this.tabs.Controls.Add(this.tabLockScreen);
+            this.tabs.Controls.Add(this.tabDeckLock);
             this.tabs.Location = new System.Drawing.Point(15, 355);
             this.tabs.Name = "tabs";
             this.tabs.SelectedIndex = 0;
@@ -513,6 +525,57 @@ namespace AlbumCoverFinder
             this.lLockScreenHint.Text = "Lock screen uses Windows.System.UserProfile.LockScreen. Managed-device group policies can block it silently - if Apply now appears to do nothing, that's the culprit.";
 
             //
+            // tabDeckLock
+            //
+            this.tabDeckLock.Controls.Add(this.lDeckLockMode);
+            this.tabDeckLock.Controls.Add(this.cbDeckLockMode);
+            this.tabDeckLock.Controls.Add(this.tDeckLockPath);
+            this.tabDeckLock.Controls.Add(this.bDeckLockBrowse);
+            this.tabDeckLock.Controls.Add(this.bDeckLockSave);
+            this.tabDeckLock.Controls.Add(this.lDeckLockHint);
+            this.tabDeckLock.Location = new System.Drawing.Point(4, 22);
+            this.tabDeckLock.Name = "tabDeckLock";
+            this.tabDeckLock.Padding = new System.Windows.Forms.Padding(3);
+            this.tabDeckLock.Size = new System.Drawing.Size(376, 334);
+            this.tabDeckLock.TabIndex = 5;
+            this.tabDeckLock.Text = "Stream Deck lock";
+            this.tabDeckLock.UseVisualStyleBackColor = true;
+
+            this.lDeckLockMode.AutoSize = true;
+            this.lDeckLockMode.Location = new System.Drawing.Point(10, 18);
+            this.lDeckLockMode.Text = "While locked, show:";
+
+            this.cbDeckLockMode.Location = new System.Drawing.Point(125, 15);
+            this.cbDeckLockMode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cbDeckLockMode.Size = new System.Drawing.Size(235, 21);
+            this.cbDeckLockMode.Name = "cbDeckLockMode";
+            this.cbDeckLockMode.SelectedIndexChanged += new System.EventHandler(this.cbDeckLockMode_SelectedIndexChanged);
+
+            this.tDeckLockPath.Location = new System.Drawing.Point(10, 50);
+            this.tDeckLockPath.Size = new System.Drawing.Size(305, 20);
+            this.tDeckLockPath.Name = "tDeckLockPath";
+
+            this.bDeckLockBrowse.Location = new System.Drawing.Point(322, 48);
+            this.bDeckLockBrowse.Size = new System.Drawing.Size(40, 25);
+            this.bDeckLockBrowse.Text = "...";
+            this.bDeckLockBrowse.UseVisualStyleBackColor = true;
+            this.bDeckLockBrowse.Click += new System.EventHandler(this.bDeckLockBrowse_Click);
+
+            this.bDeckLockSave.Location = new System.Drawing.Point(10, 85);
+            this.bDeckLockSave.Size = new System.Drawing.Size(352, 30);
+            this.bDeckLockSave.Text = "Save settings";
+            this.bDeckLockSave.UseVisualStyleBackColor = true;
+            this.bDeckLockSave.Click += new System.EventHandler(this.bDeckLockSave_Click);
+
+            this.lDeckLockHint.Location = new System.Drawing.Point(10, 125);
+            this.lDeckLockHint.Size = new System.Drawing.Size(355, 170);
+            this.lDeckLockHint.ForeColor = System.Drawing.Color.DimGray;
+            this.lDeckLockHint.Text = "What the Stream Deck shows while Windows is locked - drawn by the Tray companion straight over USB (it does not need the Elgato app). \"Now playing\" keeps the current cover up; \"Picture\"/\"GIF\" use the file above. Requires the Tray companion running; takes effect on the next lock.";
+
+            this.openDeckImageDialog.Filter = "Images and GIFs|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files|*.*";
+            this.openDeckImageDialog.Title = "Choose an image or GIF for the locked Stream Deck";
+
+            //
             // AlbumCoverFinderForm
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -550,6 +613,8 @@ namespace AlbumCoverFinder
             this.tabWallpaper.PerformLayout();
             this.tabLockScreen.ResumeLayout(false);
             this.tabLockScreen.PerformLayout();
+            this.tabDeckLock.ResumeLayout(false);
+            this.tabDeckLock.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
         }
@@ -622,5 +687,14 @@ namespace AlbumCoverFinder
         private System.Windows.Forms.Button bLockScreenApplyNow;
         private System.Windows.Forms.Button bLockScreenSave;
         private System.Windows.Forms.Label lLockScreenHint;
+
+        private System.Windows.Forms.TabPage tabDeckLock;
+        private System.Windows.Forms.Label lDeckLockMode;
+        private System.Windows.Forms.ComboBox cbDeckLockMode;
+        private System.Windows.Forms.TextBox tDeckLockPath;
+        private System.Windows.Forms.Button bDeckLockBrowse;
+        private System.Windows.Forms.Button bDeckLockSave;
+        private System.Windows.Forms.Label lDeckLockHint;
+        private System.Windows.Forms.OpenFileDialog openDeckImageDialog;
     }
 }

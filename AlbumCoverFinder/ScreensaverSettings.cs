@@ -15,6 +15,18 @@ namespace AlbumCoverFinder
     }
 
     /// <summary>
+    /// What the Tray draws on the Stream Deck (over raw USB HID) while Windows is
+    /// locked. Mirrored to the registry as a DWORD.
+    /// </summary>
+    public enum LockDeckMode
+    {
+        NowPlaying = 0,   // default: keep showing the currently-playing cover
+        Picture = 1,      // a fixed image file (LockDeckImagePath)
+        Gif = 2,          // an animated GIF file (LockDeckImagePath)
+        Off = 3           // draw nothing - leave the deck to Elgato (its logo)
+    }
+
+    /// <summary>
     /// Project-wide user settings backed by HKCU\SOFTWARE\Demo_ScreenSaver.
     /// Read by every component (screensaver, tray, finder) so changes from the
     /// finder UI propagate without restarting anything else.
@@ -57,6 +69,11 @@ namespace AlbumCoverFinder
         // Discord Rich Presence.
         public string DiscordAppId { get; set; } = string.Empty;
 
+        // Stream Deck lock-screen display, drawn by the Tray over raw USB HID when
+        // Windows locks. Default keeps showing the now-playing cover.
+        public LockDeckMode LockDeckMode { get; set; } = LockDeckMode.NowPlaying;
+        public string LockDeckImagePath { get; set; } = string.Empty;
+
         private const string RegistryPath = "SOFTWARE\\Demo_ScreenSaver";
 
         public static ScreensaverSettings Load()
@@ -79,6 +96,8 @@ namespace AlbumCoverFinder
                         s.LockScreenEnabled = ReadBool(key, "LockScreenEnabled", false);
                         s.LockScreenIntervalMinutes = Math.Max(5, ReadInt(key, "LockScreenIntervalMinutes", 60));
                         s.DiscordAppId = (key.GetValue("DiscordAppId") as string) ?? string.Empty;
+                        s.LockDeckMode = (LockDeckMode)Math.Max(0, Math.Min(3, ReadInt(key, "LockDeckMode", (int)LockDeckMode.NowPlaying)));
+                        s.LockDeckImagePath = (key.GetValue("LockDeckImagePath") as string) ?? string.Empty;
                     }
                 }
             }
@@ -104,6 +123,8 @@ namespace AlbumCoverFinder
                     key.SetValue("LockScreenEnabled", LockScreenEnabled ? 1 : 0, RegistryValueKind.DWord);
                     key.SetValue("LockScreenIntervalMinutes", LockScreenIntervalMinutes, RegistryValueKind.DWord);
                     key.SetValue("DiscordAppId", DiscordAppId ?? string.Empty);
+                    key.SetValue("LockDeckMode", (int)LockDeckMode, RegistryValueKind.DWord);
+                    key.SetValue("LockDeckImagePath", LockDeckImagePath ?? string.Empty);
                 }
             }
             catch { }

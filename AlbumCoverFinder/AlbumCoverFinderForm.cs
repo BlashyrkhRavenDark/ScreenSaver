@@ -74,6 +74,7 @@ namespace AlbumCoverFinder
             HydrateDisplayUI(settings);
             HydrateWallpaperUI(settings);
             HydrateLockScreenUI(settings);
+            HydrateDeckLockUI(settings);
             nAlbumCap.Value = settings.AlbumCap;
         }
 
@@ -331,6 +332,78 @@ namespace AlbumCoverFinder
             {
                 bLockScreenApplyNow.Enabled = true;
             }
+        }
+
+        #endregion
+
+        #region Stream Deck lock tab
+
+        private void HydrateDeckLockUI(ScreensaverSettings settings)
+        {
+            cbDeckLockMode.Items.Clear();
+            // Order MUST match the LockDeckMode enum (NowPlaying, Picture, Gif, Off).
+            cbDeckLockMode.Items.AddRange(new object[]
+            {
+                "Now playing cover (default)",
+                "Picture (file below)",
+                "Animated GIF (file below)",
+                "Off (Elgato logo)"
+            });
+            cbDeckLockMode.SelectedIndex = (int)settings.LockDeckMode;
+            tDeckLockPath.Text = settings.LockDeckImagePath ?? string.Empty;
+            UpdateDeckLockPathEnabled();
+        }
+
+        private void UpdateDeckLockPathEnabled()
+        {
+            // The file path only matters for Picture / GIF.
+            var mode = (LockDeckMode)cbDeckLockMode.SelectedIndex;
+            bool needsFile = mode == LockDeckMode.Picture || mode == LockDeckMode.Gif;
+            tDeckLockPath.Enabled = needsFile;
+            bDeckLockBrowse.Enabled = needsFile;
+        }
+
+        private void cbDeckLockMode_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            UpdateDeckLockPathEnabled();
+        }
+
+        private void bDeckLockBrowse_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(tDeckLockPath.Text ?? string.Empty);
+                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+                    openDeckImageDialog.InitialDirectory = dir;
+            }
+            catch { }
+            if (openDeckImageDialog.ShowDialog() == DialogResult.OK)
+                tDeckLockPath.Text = openDeckImageDialog.FileName;
+        }
+
+        private void bDeckLockSave_Click(object sender, EventArgs e)
+        {
+            var mode = (LockDeckMode)cbDeckLockMode.SelectedIndex;
+            string path = (tDeckLockPath.Text ?? string.Empty).Trim();
+
+            if ((mode == LockDeckMode.Picture || mode == LockDeckMode.Gif)
+                && (string.IsNullOrEmpty(path) || !File.Exists(path)))
+            {
+                tDisplayUpdate.Text = "Pick an existing image/GIF file first (the ... button), then Save.";
+                return;
+            }
+
+            var s = ScreensaverSettings.Load();
+            s.LockDeckMode = mode;
+            s.LockDeckImagePath = path;
+            s.Save();
+            tDisplayUpdate.Text = mode switch
+            {
+                LockDeckMode.NowPlaying => "Stream Deck lock screen: now-playing cover. Applies on the next lock (Tray companion must be running).",
+                LockDeckMode.Picture => "Stream Deck lock screen: your picture. Applies on the next lock.",
+                LockDeckMode.Gif => "Stream Deck lock screen: your GIF. Applies on the next lock.",
+                _ => "Stream Deck lock screen: off (Elgato shows its logo on lock)."
+            };
         }
 
         #endregion

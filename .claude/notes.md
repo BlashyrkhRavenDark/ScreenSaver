@@ -261,3 +261,28 @@ REPLICATION PATH for rotating covers on lock (build-it-ourselves):
 - VERIFY FIRST: the bundled fork only knew original/XL/Mini PIDs. This deck is
   "StreamDeckClassic" (model 20GBA9901) — confirm its PID is in the current
   StreamDeckSharp build before relying on it.
+
+## Stream Deck lock-screen display - IMPLEMENTED (2026-06-17)
+
+Configurable "what the deck shows while Windows is locked", per the RE above.
+- Settings (HKCU\SOFTWARE\Demo_ScreenSaver, in ScreensaverSettings): `LockDeckMode`
+  (enum NowPlaying=0 default / Picture=1 / Gif=2 / Off=3) + `LockDeckImagePath`.
+- Config UI: AlbumCoverFinder -> "Stream Deck lock" tab (mode dropdown + file
+  picker). Order of the combo items MUST match the enum.
+- Runtime: `ScreenSaver.Tray/LockScreenDeck.cs`. Self-subscribes to
+  `SystemEvents.SessionSwitch`; on SessionLock opens the deck via **StreamDeckSharp
+  6.1.0** (raw HID, backend = HidSharp; transitive SixLabors.ImageSharp), sets
+  brightness 100, and draws per mode on a timer; on SessionUnlock disposes the
+  board so the Elgato app reclaims it. NowPlaying reads the Tray's `nowplaying.png`
+  (kept fresh by the COM poll even while locked) and re-pushes every 1s (also
+  beats any late standby logo); Gif steps frames at their GIF delays; per-key
+  slice = compose 488x280 blurred-fill frame -> crop each key -> `SetKeyBitmap(i,
+  KeyBitmap.Create.FromBgr24Array(w,h,bgr))`. No `ClearKeys` on IMacroBoard 6.x;
+  blank with `KeyBitmap.Black`.
+- Deck: confirmed **Stream Deck MK.2, PID 0x0080**, recognized + openable
+  (shared-write) by StreamDeckSharp 6.1.0 while the Elgato app runs (spike). The
+  old BarRaider fork (0.3.4) predated MK.2 - that's why the current package matters.
+- Diagnostic: `%LOCALAPPDATA%\ScreenSaver\deck-lock.log` (mode, deck open result,
+  draw errors). Check it first if a lock-test shows nothing.
+- NOT yet verified on a real lock (can't lock the box autonomously) - needs an
+  operator Win+L test. HID draw itself is spike-proven.

@@ -18,6 +18,7 @@ namespace ScreenSaver.Tray
         private readonly global::ScreenSaver.NowPlayingMonitor m_oMonitor;
         private readonly WallpaperRenderer m_oWallpaper;
         private readonly LockScreenRenderer m_oLockScreen;
+        private readonly LockScreenDeck m_oLockDeck;
         private readonly HttpCompanion m_oHttp;
         private readonly DiscordPresence m_oDiscord;
 
@@ -49,6 +50,9 @@ namespace ScreenSaver.Tray
                 coverPersist: (artist, album, cover) => m_oCover.AddCover(artist, album, cover));
             m_oWallpaper = new WallpaperRenderer(m_oCover);
             m_oLockScreen = new LockScreenRenderer(m_oCover);
+            // Draws the deck while Windows is locked (raw HID); self-subscribes to
+            // the session-lock event and reads its mode from the registry on lock.
+            m_oLockDeck = new LockScreenDeck();
             m_oHttp = new HttpCompanion(m_oCover, m_oMonitor);
             m_oDiscord = new DiscordPresence();
 
@@ -339,6 +343,7 @@ namespace ScreenSaver.Tray
             m_oTray.Dispose();
             m_oHttp.Stop();
             m_oDiscord.Stop();
+            try { m_oLockDeck.Dispose(); } catch { }
             base.ExitThreadCore();
         }
     }
