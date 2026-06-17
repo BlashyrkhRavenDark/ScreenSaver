@@ -208,3 +208,56 @@ cover centered over a blurred-darkened fill. Output:
 `%LOCALAPPDATA%\ScreenSaver\prince-screensaver.gif`. Set it once via
 Preferences -> Screen Saver. Re-run when the collection grows. The GIF binary
 is NOT committed (regeneratable, library-specific); the generator is.
+
+## How to draw on the deck while Windows is locked — raw USB HID (RE of BarRaider, 2026-06-17)
+
+Reverse-engineered BarRaider's "Stream Deck Screen Saver" plugin (v1.7, recovered
+from GitHub git history, decompiled with ilspycmd) to learn how it shows an image
+on the deck when the PC is locked. Decompiled refs were left in
+`%LOCALAPPDATA%\Temp\sdscreensaver-re\decompiled\` (delete when done).
+
+THE MECHANISM (the important part):
+- It does NOT use the Stream Deck SDK / websocket for the lock drawing. It bundles
+  `StreamDeckSharp` + `OpenMacroBoard.SDK` + `HidLibrary` and talks to the deck over
+  **raw USB HID**, completely bypassing the Elgato app. (BarRaider.SdTools/websocket
+  is used only for its settings UI + test key.) This is unusual — most BarRaider
+  plugins are websocket-only; this one is a hybrid.
+- Lock detection: `Microsoft.Win32.SystemEvents.SessionSwitch` → on `SessionLock`
+  open the deck(s), set lock-brightness, start a 2s `System.Timers.Timer` that
+  redraws; on `SessionUnlock` stop timer, restore brightness, clear keys.
+- Device open: `StreamDeck.EnumerateDevices().Open()` → HID `CreateFile` with
+  `GENERIC_READ|WRITE` and **`FILE_SHARE_READ|FILE_SHARE_WRITE`** (share mode 3),
+  device matched by VID `0x0FD9`. Shared-write is why a 2nd writer can hold the
+  same deck while the Elgato app also has it open.
+- Draw: scale one bitmap to the full key-grid area, slice per key, `SetKeyBitmap`
+  → HID **output report** (`WriteReport`); brightness → HID **feature report**
+  (`WriteFeature`). The 2s re-push is how it "wins" the screen — it just keeps
+  overwriting. The Elgato logo is itself just a HID write anyone with the handle
+  can overwrite (StreamDeckSharp even has `GetLogoMessage()`).
+- v1.7's folder/slideshow + GIF rotation is NOT wired up (draws one static bitmap);
+  rotation must be implemented ourselves anyway.
+
+WHY THIS WORKS ON THIS MACHINE (where "keys don't work while locked"): that
+limitation is the websocket/SDK path — the app stops dispatching to normal plugins
+on lock. Raw HID sidesteps it. During the locked window the app isn't actively
+drawing, so a raw-HID writer is effectively the sole writer (no contention). Two
+writers only conflict (flicker) if both draw at once.
+
+THE ELGATO LOGO = firmware **"Standby Screen"** (Preferences → Devices → [device]
+→ Advanced; added in SD 6.6), SEPARATE from the app "Screen Saver" (Preferences →
+General). The logo shows on lock because the app stops driving the deck and the
+firmware shows its standby image (default = logo). FIRST-PARTY FIX with no code:
+set a custom Standby Screen (480x272, **static** image only) → replaces the logo.
+The app Screen Saver (which does accept a GIF and fires on lock in general) is
+suppressed here because the app sleeps the deck on lock.
+
+REPLICATION PATH for rotating covers on lock (build-it-ourselves):
+- Put it in **ScreenSaver.Tray** (already always-running; `SessionSwitch` needs a
+  long-lived process w/ message pump — a `.scr` won't do). Reuse the suite's mosaic
+  compositing for the bitmap.
+- Reference current `StreamDeckSharp` NuGet; on `SessionLock` enumerate→open→2s
+  timer drawing the next cover full-screen; on `SessionUnlock` clear + **Dispose**
+  (so the Elgato app reclaims the deck cleanly — v1.7 omits dispose; we should not).
+- VERIFY FIRST: the bundled fork only knew original/XL/Mini PIDs. This deck is
+  "StreamDeckClassic" (model 20GBA9901) — confirm its PID is in the current
+  StreamDeckSharp build before relying on it.
