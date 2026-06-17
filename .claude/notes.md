@@ -179,3 +179,32 @@ unaffected — it still shows whatever is playing. iTunes data reaches the deck
 only via the Tray's `nowplaying.json`/`png` IPC (the plugin is a file-watcher,
 not an iTunes poller), so the **Tray must be running** for the deck to show
 anything; verify it (and iTunes) before assuming the filter is broken.
+
+## Locked Windows: deck is fully sleep/locked-out; only the screensaver image is customizable (2026-06-17)
+
+Confirmed (operator + app logs): when Windows locks, the Elgato app sleeps the
+deck and shows its screen-saver image (Elgato logo by default). On THIS setup
+keys do NOT execute while locked - media control while locked is not possible
+via Elgato (the SMTC/PostMessage tricks are irrelevant; the app simply doesn't
+run the profile while locked). Mechanism in StreamDeck.log:
+`ESDWinSessionStateManager` (SESSION ENDED on lock / STARTED on unlock) +
+`ESDSleepHelper::WakeUpAllDevices` on resume.
+
+The ONLY lock-screen customization is replacing the screen-saver image
+(Preferences -> Screen Saver; built-in in 7.4.x, also BarRaider's plugin). You
+canNOT keep the live cover mosaic showing while locked, nor disable the
+lock-sleep to keep the profile up.
+
+**Canvas = 480x272** - the original 15-key Stream Deck's single LCD panel
+resolution (confirmed by an existing 480x272 asset in
+`%APPDATA%\Elgato\StreamDeck\Assets\`). The deck shows this one image through
+the 5x3 key windows. Screen saver accepts a GIF (256 colors/frame).
+
+**Our solution:** `tools/prince-screensaver/make_gif.py` (Pillow) builds a
+looping GIF rotating one cover per frame (artist filter, default exactly
+"Prince" = 28 albums; NB "contains prince" wrongly catches Prince Paul /
+Princess Nokia / Les Joyaux De La Princesse), 2 s each, 480x272, sharp square
+cover centered over a blurred-darkened fill. Output:
+`%LOCALAPPDATA%\ScreenSaver\prince-screensaver.gif`. Set it once via
+Preferences -> Screen Saver. Re-run when the collection grows. The GIF binary
+is NOT committed (regeneratable, library-specific); the generator is.
