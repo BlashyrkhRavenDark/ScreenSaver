@@ -149,15 +149,12 @@ namespace ScreenSaver
                 return;
             }
 
-            // Writer role: late-bind to iTunes, poll, publish to the shared file.
-            try
-            {
-                Type t = Type.GetTypeFromProgID("iTunes.Application");
-                if (t != null) m_oItunes = Activator.CreateInstance(t);
-            }
-            catch { m_oItunes = null; }
-            // Timer runs regardless - if iTunes wasn't installed at startup but
-            // is launched later, the next poll's re-resolve picks it up.
+            // Writer role: poll iTunes via COM - but NEVER launch it. We only attach
+            // when the user already has iTunes open (see PollItunes), and we release
+            // the COM object after every poll, so we never keep iTunes alive, never
+            // resurrect it after the user closes it, and never block its quit
+            // ("a script is using it"). The timer's first tick attaches if iTunes is
+            // already running; later ticks pick it up whenever the user opens it.
             m_oItunesPollTimer = new System.Threading.Timer(_ => PollItunes(), null, 0, ITUNES_POLL_INTERVAL_MS);
         }
 
@@ -323,33 +320,37 @@ namespace ScreenSaver
 
         private void PollItunes()
         {
-            // Re-resolve iTunes if we don't have a handle yet - covers the case
-            // where iTunes was launched after the screensaver was already running.
-            if (m_oItunes == null)
+            // NEVER launch iTunes. If the user doesn't have it open, hold no COM
+            // reference (so a closing iTunes isn't blocked by us, and we never
+            // resurrect it) and report idle.
+            if (!IsItunesRunning())
             {
-                try
+                ReleaseItunes();
+                if (m_iLastItunesTrackId != -1)
                 {
-                    Type t = Type.GetTypeFromProgID("iTunes.Application");
-                    if (t != null) m_oItunes = Activator.CreateInstance(t);
+                    m_iLastItunesTrackId = -1;
+                    WriteNowPlayingFile(null);
                 }
-                catch { m_oItunes = null; }
-                if (m_oItunes == null) { ApplyItunesUpdate(null); return; }
+                ApplyItunesUpdate(null);
+                return;
             }
 
+            // iTunes IS running, so CreateInstance attaches to the existing instance
+            // (it does not start a second one). Released again in 'finally' so we hold
+            // no lingering automation reference between polls.
+            dynamic itunes = null;
+            dynamic track = null;
             try
             {
+                Type t = Type.GetTypeFromProgID("iTunes.Application");
+                if (t == null) { ApplyItunesUpdate(null); return; }
+                itunes = Activator.CreateInstance(t);
+
                 // iTunes PlayerState: 0=stopped, 1=playing, 2=paused, 3=ff, 4=rew.
-                // Distinct handling:
-                //   1 (playing)   -> normal flow below, may refresh on track change
-                //   2 (paused)    -> KEEP the last cover visible; just stop polling
-                //                    for changes. Resumes if playback resumes.
-                //   anything else -> stopped (or session over) -> clear the file
-                //                    so subscribers go idle.
-                int playerState = (int)m_oItunes.PlayerState;
+                int playerState = (int)itunes.PlayerState;
                 if (playerState == 2)
                 {
-                    // Paused. Don't touch nowplaying.{json,png} - they keep showing
-                    // the last track on the Stream Deck and the screensaver focal tile.
+                    // Paused. Keep the last cover on the deck / focal tile.
                     return;
                 }
                 if (playerState != 1)
@@ -363,12 +364,10 @@ namespace ScreenSaver
                     return;
                 }
 
-                dynamic track = m_oItunes.CurrentTrack;
+                track = itunes.CurrentTrack;
                 if (track == null) { ApplyItunesUpdate(null); return; }
 
                 // Cheap change detection: TrackDatabaseID is a single int property.
-                // 2 COM calls per unchanged-track poll (PlayerState + this) instead
-                // of 4 (PlayerState + Artist + Album + Name). Cuts iTunes' STA load.
                 long trackId;
                 try { trackId = (long)(int)track.TrackDatabaseID; }
                 catch { trackId = 0; } // some iTunes builds expose it differently
@@ -381,16 +380,12 @@ namespace ScreenSaver
                 string album  = (string)track.Album  ?? string.Empty;
                 string title  = (string)track.Name   ?? string.Empty;
 
-                // CRITICAL: cache-first. Only ask iTunes to save its artwork to a
-                // temp file (which Bitdefender then scans and which blocks iTunes'
-                // STA) when we DON'T already have the cover locally. For a scanned
-                // library this means SaveArtworkToFile is never called.
+                // Cache-first: only ask iTunes to export its artwork when we don't
+                // already have the cover locally (scanned libraries hit cache).
                 Image cover = m_oCoverLookup != null ? m_oCoverLookup(BuildKey(artist, album)) : null;
                 bool bFromCache = cover != null;
                 if (cover == null) cover = ExtractItunesArtwork(track);
 
-                // Cover came from iTunes (not our cache) - capture it into the mosaic
-                // cache so albums whose files lack embedded art still show up later.
                 if (!bFromCache && cover != null)
                 {
                     try { m_oCoverPersist?.Invoke(artist, album, cover); } catch { /* non-fatal */ }
@@ -405,21 +400,47 @@ namespace ScreenSaver
                 };
                 m_iLastItunesTrackId = trackId;
 
-                // Publish for the screensaver and SD plugin (which no longer poll
-                // iTunes themselves). Write before raising the event so a fresh
-                // FSWatcher-driven read by another process sees the same data.
+                // Publish for the screensaver and SD plugin. PNG-then-JSON ordering
+                // handled inside WriteNowPlayingFile.
                 WriteNowPlayingFile(info);
-
                 ApplyItunesUpdate(info);
             }
             catch
             {
-                // iTunes was likely closed - drop the RCW and try again next tick.
-                try { System.Runtime.InteropServices.Marshal.ReleaseComObject(m_oItunes); } catch { }
-                m_oItunes = null;
                 m_iLastItunesTrackId = -1;
                 WriteNowPlayingFile(null);
                 ApplyItunesUpdate(null);
+            }
+            finally
+            {
+                // Release every RCW each poll. This is what lets the user quit iTunes
+                // freely (no lingering automation client holding it) and guarantees we
+                // never keep it alive.
+                if (track != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(track); } catch { } }
+                if (itunes != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(itunes); } catch { } }
+            }
+        }
+
+        /// <summary>True only if the user already has iTunes open. We use this to
+        /// gate COM attach so we never launch (resurrect) iTunes ourselves.</summary>
+        private static bool IsItunesRunning()
+        {
+            try
+            {
+                var ps = System.Diagnostics.Process.GetProcessesByName("iTunes");
+                bool any = ps.Length > 0;
+                foreach (var p in ps) p.Dispose();
+                return any;
+            }
+            catch { return false; }
+        }
+
+        private void ReleaseItunes()
+        {
+            if (m_oItunes != null)
+            {
+                try { System.Runtime.InteropServices.Marshal.ReleaseComObject(m_oItunes); } catch { }
+                m_oItunes = null;
             }
         }
 
@@ -484,18 +505,26 @@ namespace ScreenSaver
         private static Image ExtractItunesArtwork(dynamic track)
         {
             string tmpPath = null;
+            dynamic artworks = null;
+            dynamic art = null;
             try
             {
-                dynamic artworks = track.Artwork;
+                artworks = track.Artwork;
                 if (artworks == null || (int)artworks.Count == 0) return null;
-                dynamic art = artworks[1]; // iTunes uses 1-based indexing
+                art = artworks[1]; // iTunes uses 1-based indexing
                 tmpPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "itunes_cover_" + Guid.NewGuid().ToString("N") + ".jpg");
                 art.SaveArtworkToFile(tmpPath);
                 using (var fs = new System.IO.FileStream(tmpPath, System.IO.FileMode.Open, System.IO.FileAccess.Read))
                     return new Bitmap(fs);
             }
             catch { return null; }
-            finally { try { if (tmpPath != null) System.IO.File.Delete(tmpPath); } catch { } }
+            finally
+            {
+                // Release the artwork RCWs too - any held iTunes sub-object blocks quit.
+                if (art != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(art); } catch { } }
+                if (artworks != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(artworks); } catch { } }
+                try { if (tmpPath != null) System.IO.File.Delete(tmpPath); } catch { }
+            }
         }
 
         private void ApplySmtcUpdate(NowPlayingInfo info)

@@ -286,3 +286,27 @@ Configurable "what the deck shows while Windows is locked", per the RE above.
   draw errors). Check it first if a lock-test shows nothing.
 - NOT yet verified on a real lock (can't lock the box autonomously) - needs an
   operator Win+L test. HID draw itself is spike-proven.
+
+## iTunes COM: never launch it, never hold it persistently (2026-06-20)
+
+Bug (user-reported): iTunes wouldn't close ("a script is using it"), relaunched
+itself after force-close, and the Stream Deck buttons/updates died. Cause: the
+Tray's NowPlayingMonitor poll did `Activator.CreateInstance("iTunes.Application")`
+whenever it had no handle. For an out-of-process COM server that LAUNCHES iTunes if
+it isn't running, so the 2s poll RESURRECTED iTunes every force-close, and the
+persistently-held RCW made iTunes refuse to quit. The relaunch storm also wedged the
+Elgato iTunes-controller plugin + SMTC, so the deck stopped updating / buttons died.
+(The lock-deck feature was NOT involved - deck-lock.log showed clean lock/unlock.)
+
+Fix (NowPlayingMonitor, writer/poll path only; readers with pollItunes=false were
+never affected - they only watch nowplaying.json): (1) `IsItunesRunning()` gate -
+attach ONLY when iTunes.exe is already in the process list, NEVER CreateInstance
+otherwise, so we never launch it; (2) attach per-poll and `Marshal.ReleaseComObject`
+the app + track + artwork RCWs in `finally` every cycle, so no lingering automation
+client blocks iTunes' quit; (3) removed the startup CreateInstance in
+TryStartItunesPolling.
+
+Operational note: BitDefender is currently killing the PowerShell *tool* spawns
+(`uv_spawn powershell.exe` -> EPERM), esp. on recon-type commands (WMI, powercfg,
+event log). The Bash tool (dotnet / git / taskkill / cp) still works - use it for
+build, deploy, and process control until that clears.
