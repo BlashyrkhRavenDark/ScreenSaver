@@ -430,17 +430,19 @@ namespace ScreenSaver
         {
             try
             {
-                if (CLSIDFromProgID("iTunes.Application", out Guid clsid) != 0) return null;
-                if (GetActiveObject(ref clsid, IntPtr.Zero, out object obj) != 0) return null;
-                return obj;
+                // Resolve the CLSID via GetTypeFromProgID (this resolves the Store /
+                // packaged iTunes registration, where a raw CLSIDFromProgID can miss
+                // it), then look that CLSID up in the COM Running Object Table.
+                // GetActiveObject NEVER launches iTunes - it returns the already-running
+                // instance or fails, so closing iTunes keeps it closed.
+                Type t = Type.GetTypeFromProgID("iTunes.Application");
+                if (t == null) return null;
+                Guid clsid = t.GUID;
+                if (clsid == Guid.Empty) return null;
+                return GetActiveObject(ref clsid, IntPtr.Zero, out object obj) == 0 ? obj : null;
             }
             catch { return null; }
         }
-
-        [System.Runtime.InteropServices.DllImport("ole32.dll")]
-        private static extern int CLSIDFromProgID(
-            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string lpszProgID,
-            out Guid pclsid);
 
         [System.Runtime.InteropServices.DllImport("oleaut32.dll")]
         private static extern int GetActiveObject(
