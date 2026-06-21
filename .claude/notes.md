@@ -329,3 +329,31 @@ GetActiveObject returns the running instance ONLY if it's registered in the ROT
 and NEVER launches the server, so a half-closed iTunes is reported as gone instead
 of relaunched. Released per poll as before. Removed the process-list gate and the
 m_oItunes field. NEVER use CreateInstance/CoCreate for iTunes attach again.
+
+## iTunes COM is fundamentally hostile on the Store build (2026-06-22)
+
+Probe against the live Store/packaged iTunes (PID running):
+- `GetTypeFromProgID("iTunes.Application")` resolves fine (CLSID dc0c2640-...).
+- `GetActiveObject(clsid)` -> **0x800401E3 MK_E_UNAVAILABLE** (obj null). The Store
+  iTunes does NOT expose its automation object to outside processes, so the
+  ROT/"attach-only, never launch" approach is IMPOSSIBLE here.
+- `Activator.CreateInstance` -> works, reads CurrentTrack, and when iTunes is
+  already running it attaches WITHOUT spawning a new PID. But it LAUNCHES iTunes
+  when absent (the relaunch bug).
+
+Worse, demonstrated this session: with our Tray attached, a graceful iTunes quit is
+BLOCKED ("a script is using it") and iTunes goes COM-unresponsive on the prompt;
+CreateInstance then spawns a duplicate iTunes. Killing the Tray (removing the
+automation client) let iTunes quit instantly. So **any** COM attach from our Tray
+creates quit-friction; per-poll release shrinks but does not remove the collision
+window, and a "detect the spawned PID and kill it" build (committed here) still
+(a) trips "script is using it" on close and (b) flashes/thrashes a duplicate during
+the shutdown window. CreateInstance-based polling is a dead end for clean UX.
+
+LIKELY REAL FIX to pursue: check whether the Store iTunes publishes to **SMTC**
+(Windows System Media Transport Controls). If it does, read now-playing via the
+existing SMTC monitor and DROP iTunes COM entirely (zero quit-friction, zero
+relaunch) - and revisit the deck's iTunes-only filter (SMTC info is FromItunes=
+false today). If SMTC has no iTunes, the alternatives are proper COM quit-event
+handling (OnAboutToPromptUserToQuitEvent; hard via late-bound dynamic) or dropping
+the iTunes cover feed from the Tray. Decision pending operator input.

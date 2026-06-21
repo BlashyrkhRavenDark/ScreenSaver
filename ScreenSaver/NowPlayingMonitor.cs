@@ -319,16 +319,20 @@ namespace ScreenSaver
 
         private void PollItunes()
         {
-            // Attach to iTunes ONLY if it is already running, via the COM Running
-            // Object Table (GetActiveObject) - which NEVER launches it. CreateInstance/
-            // CoCreate would START iTunes when it's absent; worse, during iTunes'
-            // graceful shutdown the process LINGERS in the task list while its COM
-            // object is already revoked, so a process-list gate + CreateInstance
-            // relaunches it via DCOM on the next poll - that was the "iTunes keeps
-            // coming back" bug (its parent showed up as svchost/DcomLaunch). An ROT
-            // lookup reports a half-closed iTunes as gone instead of resurrecting it.
-            dynamic itunes = TryGetRunningItunes();
-            if (itunes == null)
+            // The Store/packaged iTunes does NOT expose its automation object to
+            // outside processes (GetActiveObject -> MK_E_UNAVAILABLE, verified on this
+            // box), so the only way to read it is CreateInstance/CoCreate. But that
+            // LAUNCHES iTunes when it isn't running - and during a graceful quit the
+            // process lingers in the task list with its COM object already revoked, so
+            // CreateInstance spawns a brand-new iTunes (DCOM; parent svchost). That was
+            // the "iTunes keeps coming back" bug. Guard it two ways:
+            //   1) never CreateInstance unless iTunes.exe is already in the task list;
+            //   2) snapshot the iTunes PIDs around the call and, if it spawned a NEW
+            //      instance (the shutdown-window race), release + kill that instance.
+            // When iTunes is genuinely running, CreateInstance attaches to it without
+            // spawning anything (verified), so this is transparent in the normal case.
+            int[] before = ItunesPids();
+            if (before.Length == 0)
             {
                 if (m_iLastItunesTrackId != -1)
                 {
@@ -339,11 +343,32 @@ namespace ScreenSaver
                 return;
             }
 
-            // Released again in 'finally' so we hold no automation reference between
-            // polls (that reference is what makes iTunes refuse to quit).
+            // itunes released in 'finally' so we hold no automation reference between
+            // polls (a lingering reference is what makes iTunes refuse to quit).
+            dynamic itunes = null;
             dynamic track = null;
             try
             {
+                Type t = Type.GetTypeFromProgID("iTunes.Application");
+                if (t == null) { ApplyItunesUpdate(null); return; }
+                itunes = Activator.CreateInstance(t);
+
+                // Did CreateInstance just resurrect iTunes (shutdown-window race)? If a
+                // PID appeared that wasn't running before the call, we launched it -
+                // kill it and report idle so iTunes stays closed.
+                if (KillItunesSpawnedSince(before))
+                {
+                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(itunes); } catch { }
+                    itunes = null;
+                    if (m_iLastItunesTrackId != -1)
+                    {
+                        m_iLastItunesTrackId = -1;
+                        WriteNowPlayingFile(null);
+                    }
+                    ApplyItunesUpdate(null);
+                    return;
+                }
+
                 // iTunes PlayerState: 0=stopped, 1=playing, 2=paused, 3=ff, 4=rew.
                 int playerState = (int)itunes.PlayerState;
                 if (playerState == 2)
@@ -415,7 +440,7 @@ namespace ScreenSaver
                 // freely (no lingering automation client holding it) and guarantees we
                 // never keep it alive.
                 if (track != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(track); } catch { } }
-                try { System.Runtime.InteropServices.Marshal.ReleaseComObject(itunes); } catch { }
+                if (itunes != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(itunes); } catch { } }
             }
         }
 
@@ -426,28 +451,34 @@ namespace ScreenSaver
         /// half-shut-down iTunes (process lingering, COM object already revoked) is
         /// reported as gone rather than being relaunched.
         /// </summary>
-        private static dynamic TryGetRunningItunes()
+        /// <summary>Current iTunes.exe process IDs (empty array if none / on error).</summary>
+        private static int[] ItunesPids()
         {
             try
             {
-                // Resolve the CLSID via GetTypeFromProgID (this resolves the Store /
-                // packaged iTunes registration, where a raw CLSIDFromProgID can miss
-                // it), then look that CLSID up in the COM Running Object Table.
-                // GetActiveObject NEVER launches iTunes - it returns the already-running
-                // instance or fails, so closing iTunes keeps it closed.
-                Type t = Type.GetTypeFromProgID("iTunes.Application");
-                if (t == null) return null;
-                Guid clsid = t.GUID;
-                if (clsid == Guid.Empty) return null;
-                return GetActiveObject(ref clsid, IntPtr.Zero, out object obj) == 0 ? obj : null;
+                var ps = System.Diagnostics.Process.GetProcessesByName("iTunes");
+                int[] ids = new int[ps.Length];
+                for (int i = 0; i < ps.Length; i++) { ids[i] = ps[i].Id; ps[i].Dispose(); }
+                return ids;
             }
-            catch { return null; }
+            catch { return new int[0]; }
         }
 
-        [System.Runtime.InteropServices.DllImport("oleaut32.dll")]
-        private static extern int GetActiveObject(
-            ref Guid rclsid, IntPtr pvReserved,
-            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.IUnknown)] out object ppunk);
+        /// <summary>Kill any iTunes process whose PID is NOT in <paramref name="before"/>
+        /// - i.e. one that CreateInstance just launched. Returns true if it killed any.</summary>
+        private static bool KillItunesSpawnedSince(int[] before)
+        {
+            bool killed = false;
+            foreach (int pid in ItunesPids())
+            {
+                bool known = false;
+                for (int i = 0; i < before.Length; i++) if (before[i] == pid) { known = true; break; }
+                if (known) continue;
+                try { var p = System.Diagnostics.Process.GetProcessById(pid); p.Kill(); p.Dispose(); killed = true; }
+                catch { }
+            }
+            return killed;
+        }
 
         /// <summary>
         /// Writer-side IPC: atomically swap in a new nowplaying.json + nowplaying.png
