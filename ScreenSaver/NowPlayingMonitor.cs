@@ -60,7 +60,6 @@ namespace ScreenSaver
         // Non-polling instances (screensaver, Stream Deck plugin) watch a shared
         // file the polling instance writes, so iTunes' STA is hit by ONE process.
         private readonly bool m_bPollItunes;
-        private dynamic m_oItunes;
         private long m_iLastItunesTrackId = -1;
         private System.Threading.Timer m_oItunesPollTimer;
         private FileSystemWatcher m_oItunesWatcher;
@@ -320,12 +319,17 @@ namespace ScreenSaver
 
         private void PollItunes()
         {
-            // NEVER launch iTunes. If the user doesn't have it open, hold no COM
-            // reference (so a closing iTunes isn't blocked by us, and we never
-            // resurrect it) and report idle.
-            if (!IsItunesRunning())
+            // Attach to iTunes ONLY if it is already running, via the COM Running
+            // Object Table (GetActiveObject) - which NEVER launches it. CreateInstance/
+            // CoCreate would START iTunes when it's absent; worse, during iTunes'
+            // graceful shutdown the process LINGERS in the task list while its COM
+            // object is already revoked, so a process-list gate + CreateInstance
+            // relaunches it via DCOM on the next poll - that was the "iTunes keeps
+            // coming back" bug (its parent showed up as svchost/DcomLaunch). An ROT
+            // lookup reports a half-closed iTunes as gone instead of resurrecting it.
+            dynamic itunes = TryGetRunningItunes();
+            if (itunes == null)
             {
-                ReleaseItunes();
                 if (m_iLastItunesTrackId != -1)
                 {
                     m_iLastItunesTrackId = -1;
@@ -335,17 +339,11 @@ namespace ScreenSaver
                 return;
             }
 
-            // iTunes IS running, so CreateInstance attaches to the existing instance
-            // (it does not start a second one). Released again in 'finally' so we hold
-            // no lingering automation reference between polls.
-            dynamic itunes = null;
+            // Released again in 'finally' so we hold no automation reference between
+            // polls (that reference is what makes iTunes refuse to quit).
             dynamic track = null;
             try
             {
-                Type t = Type.GetTypeFromProgID("iTunes.Application");
-                if (t == null) { ApplyItunesUpdate(null); return; }
-                itunes = Activator.CreateInstance(t);
-
                 // iTunes PlayerState: 0=stopped, 1=playing, 2=paused, 3=ff, 4=rew.
                 int playerState = (int)itunes.PlayerState;
                 if (playerState == 2)
@@ -417,32 +415,37 @@ namespace ScreenSaver
                 // freely (no lingering automation client holding it) and guarantees we
                 // never keep it alive.
                 if (track != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(track); } catch { } }
-                if (itunes != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(itunes); } catch { } }
+                try { System.Runtime.InteropServices.Marshal.ReleaseComObject(itunes); } catch { }
             }
         }
 
-        /// <summary>True only if the user already has iTunes open. We use this to
-        /// gate COM attach so we never launch (resurrect) iTunes ourselves.</summary>
-        private static bool IsItunesRunning()
+        /// <summary>
+        /// Returns the already-running iTunes Application via the COM Running Object
+        /// Table, or null if iTunes isn't running. Unlike CreateInstance/CoCreate this
+        /// NEVER launches iTunes - so closing iTunes makes it stay closed, and a
+        /// half-shut-down iTunes (process lingering, COM object already revoked) is
+        /// reported as gone rather than being relaunched.
+        /// </summary>
+        private static dynamic TryGetRunningItunes()
         {
             try
             {
-                var ps = System.Diagnostics.Process.GetProcessesByName("iTunes");
-                bool any = ps.Length > 0;
-                foreach (var p in ps) p.Dispose();
-                return any;
+                if (CLSIDFromProgID("iTunes.Application", out Guid clsid) != 0) return null;
+                if (GetActiveObject(ref clsid, IntPtr.Zero, out object obj) != 0) return null;
+                return obj;
             }
-            catch { return false; }
+            catch { return null; }
         }
 
-        private void ReleaseItunes()
-        {
-            if (m_oItunes != null)
-            {
-                try { System.Runtime.InteropServices.Marshal.ReleaseComObject(m_oItunes); } catch { }
-                m_oItunes = null;
-            }
-        }
+        [System.Runtime.InteropServices.DllImport("ole32.dll")]
+        private static extern int CLSIDFromProgID(
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string lpszProgID,
+            out Guid pclsid);
+
+        [System.Runtime.InteropServices.DllImport("oleaut32.dll")]
+        private static extern int GetActiveObject(
+            ref Guid rclsid, IntPtr pvReserved,
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.IUnknown)] out object ppunk);
 
         /// <summary>
         /// Writer-side IPC: atomically swap in a new nowplaying.json + nowplaying.png
@@ -628,7 +631,6 @@ namespace ScreenSaver
                     m_oManager.CurrentSessionChanged -= OnCurrentSessionChanged;
                 if (m_oItunesPollTimer != null) { m_oItunesPollTimer.Dispose(); m_oItunesPollTimer = null; }
                 if (m_oItunesWatcher != null) { m_oItunesWatcher.EnableRaisingEvents = false; m_oItunesWatcher.Dispose(); m_oItunesWatcher = null; }
-                if (m_oItunes != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(m_oItunes); } catch { } m_oItunes = null; }
             }
             catch { /* tearing down */ }
         }

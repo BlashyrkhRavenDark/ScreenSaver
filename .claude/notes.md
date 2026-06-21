@@ -310,3 +310,22 @@ Operational note: BitDefender is currently killing the PowerShell *tool* spawns
 (`uv_spawn powershell.exe` -> EPERM), esp. on recon-type commands (WMI, powercfg,
 event log). The Bash tool (dotnet / git / taskkill / cp) still works - use it for
 build, deploy, and process control until that clears.
+
+## iTunes relaunch fix #2: use GetActiveObject (ROT), not CreateInstance (2026-06-21)
+
+The 2026-06-20 fix above (gate on iTunes.exe in the process list, then
+Activator.CreateInstance) was INSUFFICIENT - iTunes still relaunched itself. Root
+cause: during a graceful iTunes quit the process LINGERS in the task list for a
+few seconds while its COM object is already revoked from the ROT. A poll landing
+in that window passes the process-list gate, calls CreateInstance, finds no
+registered server, and DCOM LAUNCHES a fresh iTunes (confirmed: relaunched
+iTunes' parent was svchost = DcomLaunch). Isolation test nailed it: with the Tray
+killed, a graceful iTunes close stayed closed and iTunesControllerPro (the Elgato
+plugin, also a COM client) did NOT relaunch it - so our Tray was the resurrector.
+
+Real fix: attach via the COM Running Object Table - P/Invoke `CLSIDFromProgID` +
+`GetActiveObject` (oleaut32; Marshal.GetActiveObject was removed from .NET 5+).
+GetActiveObject returns the running instance ONLY if it's registered in the ROT
+and NEVER launches the server, so a half-closed iTunes is reported as gone instead
+of relaunched. Released per poll as before. Removed the process-list gate and the
+m_oItunes field. NEVER use CreateInstance/CoCreate for iTunes attach again.
