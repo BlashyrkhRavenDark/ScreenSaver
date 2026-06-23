@@ -441,6 +441,12 @@ namespace ScreenSaver
                 // never keep it alive.
                 if (track != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(track); } catch { } }
                 if (itunes != null) { try { System.Runtime.InteropServices.Marshal.ReleaseComObject(itunes); } catch { } }
+                // The dynamic late-bound calls above create transient RCWs that the
+                // explicit ReleaseComObject calls don't cover. Reap them so we hold
+                // ZERO iTunes COM references between polls - otherwise lingering RCWs
+                // keep iTunes' "a script is using it" quit-block alive and stop it
+                // from closing. This is why per-poll ReleaseComObject alone wasn't enough.
+                try { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); } catch { }
             }
         }
 

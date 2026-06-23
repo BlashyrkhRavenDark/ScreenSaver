@@ -357,3 +357,24 @@ relaunch) - and revisit the deck's iTunes-only filter (SMTC info is FromItunes=
 false today). If SMTC has no iTunes, the alternatives are proper COM quit-event
 handling (OnAboutToPromptUserToQuitEvent; hard via late-bound dynamic) or dropping
 the iTunes cover feed from the Tray. Decision pending operator input.
+
+## RESOLVED: reap leaked COM RCWs so iTunes can close (2026-06-22, verified)
+
+SMTC route confirmed DEAD: with the Store iTunes playing, `GetSessions()` returned
+**0 sessions** - it publishes nothing to SMTC. So COM is the only way to read it.
+
+The "won't close / a script is using it" was NOT just our explicit references: the
+`dynamic` late-bound calls (itunes.PlayerState, .CurrentTrack, etc.) create transient
+RCWs that `Marshal.ReleaseComObject(itunes/track)` doesn't cover, and those lingered
+between polls and kept iTunes' quit blocked. Fix: after the explicit releases, run
+`GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();` in the poll's finally so
+we hold ZERO iTunes references between polls.
+
+VERIFIED working combo (NowPlayingMonitor poll path): (1) gate - only CreateInstance
+when iTunes.exe is already running; (2) detect-and-kill any instance CreateInstance
+spawns during the shutdown window; (3) GC-reap each poll. Result: covers update AND a
+graceful iTunes close stays closed (tested: close -> NONE, stayed NONE 25s+).
+Residual: a duplicate iTunes can flash for <10s during the shutdown-window race
+before the detect-kill removes it (intrinsic - the Store iTunes has no GetActiveObject
+no-launch attach, so CreateInstance is the only reader and it launches on revoked COM).
+If that flash ever annoys, lengthen ITUNES_POLL_INTERVAL_MS to shrink the race odds.
