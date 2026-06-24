@@ -378,3 +378,31 @@ Residual: a duplicate iTunes can flash for <10s during the shutdown-window race
 before the detect-kill removes it (intrinsic - the Store iTunes has no GetActiveObject
 no-launch attach, so CreateInstance is the only reader and it launches on revoked COM).
 If that flash ever annoys, lengthen ITUNES_POLL_INTERVAL_MS to shrink the race odds.
+
+## iPhone-not-recognized: Apple-side (driver), not our COM - + device backoff (2026-06-24)
+
+Two research agents + local probes. Findings:
+- iTunes COM does NOT directly block device recognition - pairing runs through a
+  separate stack (USB driver usbaapl64 -> AppleMobileDeviceProcess -> Lockdown).
+  Our aggressive poll (2s CreateInstance, per-poll GC, spawn-kill) is at most a
+  flake-amplifier during the handshake, not the root cause.
+- GetActiveObject is unusable for iTunes (not in the ROT) - confirms earlier probe.
+  Per-poll GC.Collect is an anti-pattern (right shape: tight child-RCW release +
+  teardown-only GC). iTunes killed COM events ~12.7, so polling is the only option.
+- LIKELY ROOT CAUSE of non-recognition: the Microsoft Store iTunes' driver binding.
+  The iPhone's MI_01 interface is bound to WINUSB, not Apple's usbaapl64; iTunes'
+  COM Sources showed NO device (only Library/Radio/Store) with our Tray stopped.
+  Classic Store-iTunes problem -> fix is APPLE-SIDE: Trust, reset
+  C:\ProgramData\Apple\Lockdown, and ideally reinstall iTunes from apple.com (or use
+  the Apple Devices app), which installs the proper Apple Mobile Device USB driver.
+- CAVEAT (must re-test): during the "iTunes sees no device" probe the iPhone may have
+  been unplugged/dropped-off USB - CM_Get_Device_ID_List(PRESENT) later showed NO
+  Apple device present. So the "not our software" verdict needs a re-test with the
+  phone CONFIRMED connected (plug direct, unlock, Trust), Tray stopped: if iTunes
+  still sees no device -> Apple-side confirmed; if it does -> our software was involved.
+
+Implemented (forward-protection, deployed): NowPlayingMonitor.PollItunes now returns
+early - touching NO iTunes COM - whenever an Apple mobile device is connected,
+detected via SetupAPI CM_Get_Device_ID_List with CM_GETIDLIST_FILTER_PRESENT for
+USB\VID_05AC&PID_12xx (reliable "present" signal; registry Enum is stale, driver
+service varies WinUSB/usbaapl64). Covers hold last value while a phone is plugged in.
