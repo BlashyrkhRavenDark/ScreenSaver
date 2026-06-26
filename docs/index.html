@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScreenSaver: living document</title>
+<!--
+  ============================================================
+  THE LOGBOOK TEMPLATE
+  A single living document per project. Copy this file to docs/index.html.
+  Fill the sections in order: orient, understand, look up, try, verify, remember.
+  Maintenance rule: if you change the code, update this file and add a journal
+  entry in the same pass. Bump the rev and date in the masthead.
+  Retheme by editing the CSS variables in :root below. No build step.
+  ============================================================
+-->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+:root{
+  --ink:#15181e; --ink-raised:#1c2027; --ink-sunken:#11141a;
+  --line:#2a2f38; --line-soft:#22272f;
+  --text:#dadde2; --text-dim:#99a0ab; --text-faint:#6c7480;
+  --brass:#c9a24a; --brass-bright:#e6c578; --brass-dim:rgba(201,162,74,.16);
+  --cyan:#74b6c2; --cyan-bright:#9bd6e0; --cyan-dim:rgba(116,182,194,.14);
+  --green:#88b67e; --clay:#cd8472; --violet:#a99ad6;
+  --shadow:0 1px 0 rgba(255,255,255,.02), 0 18px 40px -28px rgba(0,0,0,.8);
+  --r:10px; --r-sm:6px;
+  --display:'Fraunces',Georgia,'Times New Roman',serif;
+  --body:'Hanken Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --maxw:74ch;
+}
+html[data-theme="light"]{
+  --ink:#f3f4f1; --ink-raised:#fff; --ink-sunken:#eceee9; --line:#d8dad3; --line-soft:#e3e5df;
+  --text:#1b1f26; --text-dim:#545b65; --text-faint:#868d97;
+  --brass:#90701f; --brass-bright:#735819; --brass-dim:rgba(144,112,31,.12);
+  --cyan:#23707e; --cyan-bright:#185862; --cyan-dim:rgba(35,112,126,.10);
+  --green:#3f7a4e; --clay:#b15a45; --violet:#6552a8;
+  --shadow:0 1px 2px rgba(20,24,30,.06), 0 14px 30px -24px rgba(20,24,30,.25);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:28px}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{transition:none!important; animation:none!important} }
+body{margin:0; background:var(--ink); color:var(--text); font-family:var(--body); font-size:17px; line-height:1.62; -webkit-font-smoothing:antialiased}
+body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5; background-image:linear-gradient(var(--line-soft) 1px, transparent 1px),linear-gradient(90deg, var(--line-soft) 1px, transparent 1px); background-size:34px 34px; mask-image:radial-gradient(circle at 30% 0%, #000 0%, transparent 70%); -webkit-mask-image:radial-gradient(circle at 30% 0%, #000 0%, transparent 70%)}
+a{color:var(--cyan); text-decoration:none; border-bottom:1px solid var(--cyan-dim); transition:border-color .15s, color .15s}
+a:hover{color:var(--cyan-bright); border-bottom-color:var(--cyan)}
+a[target="_blank"]::after{content:"\2197"; font-size:.72em; vertical-align:super; margin-left:.12em; color:var(--text-faint)}
+.topbar{position:sticky; top:0; z-index:30; backdrop-filter:blur(8px); background:linear-gradient(var(--ink), color-mix(in srgb, var(--ink) 78%, transparent)); border-bottom:1px solid var(--line-soft)}
+.topbar-in{max-width:1180px; margin:0 auto; padding:10px 24px; display:flex; align-items:center; gap:16px}
+.brand{font-family:var(--mono); font-size:12.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-dim); display:flex; align-items:center; gap:9px}
+.brand .dot{width:7px; height:7px; border-radius:50%; background:var(--brass); box-shadow:0 0 10px var(--brass)}
+.topbar-actions{margin-left:auto; display:flex; gap:8px}
+.btn{font-family:var(--mono); font-size:11.5px; letter-spacing:.04em; color:var(--text-dim); background:var(--ink-raised); border:1px solid var(--line); border-radius:var(--r-sm); padding:6px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:all .15s}
+.btn:hover{color:var(--text); border-color:var(--brass); background:var(--brass-dim)}
+.btn svg{width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:1.7}
+.wrap{max-width:1180px; margin:0 auto; padding:0 24px; position:relative; z-index:1}
+.layout{display:grid; grid-template-columns:228px minmax(0,1fr); gap:54px; align-items:start}
+@media (max-width:900px){ .layout{grid-template-columns:1fr; gap:0} }
+.toc{position:sticky; top:74px; align-self:start; padding:28px 0; max-height:calc(100vh - 74px); overflow:auto}
+.toc-title{font-family:var(--mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-faint); margin:0 0 14px; padding-left:14px}
+.toc a{display:block; border:0; color:var(--text-dim); font-size:14px; padding:5px 0 5px 14px; border-left:2px solid var(--line-soft); transition:all .15s}
+.toc a:hover{color:var(--text)}
+.toc a.active{color:var(--brass-bright); border-left-color:var(--brass); font-weight:600}
+@media (max-width:900px){ .toc{display:none} }
+main{padding:30px 0 80px; min-width:0}
+.masthead{border:1px solid var(--line); border-radius:var(--r); background:linear-gradient(150deg, var(--ink-raised), color-mix(in srgb, var(--ink-raised) 86%, var(--brass) 4%)); padding:30px 32px; box-shadow:var(--shadow); position:relative; overflow:hidden}
+.masthead::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:linear-gradient(var(--brass), var(--brass-bright))}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--brass); margin:0 0 14px}
+.masthead h1{font-family:var(--display); font-weight:600; font-size:clamp(34px,5.4vw,52px); line-height:1.02; letter-spacing:-.02em; margin:0 0 12px; color:var(--text)}
+.lede{font-size:18.5px; color:var(--text-dim); max-width:60ch; margin:0}
+.meta-row{display:flex; flex-wrap:wrap; gap:10px 22px; margin-top:24px; padding-top:20px; border-top:1px solid var(--line-soft); font-family:var(--mono); font-size:12px}
+.meta-row .k{color:var(--text-faint)} .meta-row .v{color:var(--text-dim)}
+.badge{display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border-radius:99px; font-family:var(--mono); font-size:11px; letter-spacing:.06em; border:1px solid currentColor}
+.badge::before{content:""; width:6px; height:6px; border-radius:50%; background:currentColor}
+.badge.living{color:var(--green)} .badge.draft{color:var(--brass)} .badge.stable{color:var(--cyan)}
+section{margin-top:56px; scroll-margin-top:24px}
+.sec-head{display:flex; align-items:baseline; gap:14px; margin-bottom:8px}
+.sec-num{font-family:var(--mono); font-size:13px; color:var(--brass); letter-spacing:.05em; padding-top:6px}
+h2{font-family:var(--display); font-weight:600; font-size:clamp(25px,3.4vw,32px); letter-spacing:-.015em; margin:0; color:var(--text)}
+h3{font-family:var(--display); font-weight:600; font-size:21px; margin:34px 0 8px; color:var(--text)}
+p{margin:0 0 16px; max-width:var(--maxw)}
+.dim{color:var(--text-dim)}
+strong,em{color:var(--text)} strong{font-weight:600}
+code{font-family:var(--mono); font-size:.86em; background:var(--ink-sunken); border:1px solid var(--line-soft); border-radius:4px; padding:1px 6px; color:var(--brass-bright)}
+ul,ol{max-width:var(--maxw); padding-left:22px; margin:0 0 16px} li{margin:6px 0} li::marker{color:var(--brass)}
+.kicker{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-faint); display:block; margin:30px 0 6px}
+details.fold{border:1px solid var(--line); border-left:3px solid var(--brass); border-radius:var(--r-sm); background:var(--ink-raised); margin:18px 0; overflow:hidden}
+details.fold[open]{box-shadow:var(--shadow)}
+details.fold.demo{border-left-color:var(--cyan)} details.fold.why{border-left-color:var(--violet)}
+details.fold > summary{list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:12px; font-weight:600; color:var(--text); user-select:none}
+details.fold > summary::-webkit-details-marker{display:none}
+details.fold > summary:hover{background:var(--brass-dim)}
+details.fold.demo > summary:hover{background:var(--cyan-dim)}
+details.fold > summary:focus-visible{outline:2px solid var(--cyan); outline-offset:-2px}
+.tag{font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; padding:3px 7px; border-radius:4px; background:var(--brass-dim); color:var(--brass); white-space:nowrap}
+.demo .tag{background:var(--cyan-dim); color:var(--cyan)} .why .tag{background:color-mix(in srgb,var(--violet) 16%, transparent); color:var(--violet)}
+.s-label{flex:1; min-width:0}
+.marker{width:11px; height:11px; flex:none; border-right:2px solid var(--text-faint); border-bottom:2px solid var(--text-faint); transform:rotate(-45deg); transition:transform .2s; margin-left:auto}
+details[open] > summary .marker{transform:rotate(45deg)}
+.panel-body{padding:4px 18px 18px; border-top:1px solid var(--line-soft); color:var(--text-dim)}
+.panel-body :is(h3,h4){color:var(--text); margin-top:18px} .panel-body p:last-child,.panel-body ul:last-child{margin-bottom:0}
+.code{position:relative; margin:16px 0; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--ink-sunken); overflow:hidden}
+.code-head{display:flex; align-items:center; gap:8px; padding:7px 12px; border-bottom:1px solid var(--line-soft)}
+.code-head .fn{font-family:var(--mono); font-size:11px; color:var(--text-faint)}
+.copy{margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--text-dim); background:transparent; border:1px solid var(--line); border-radius:4px; padding:3px 8px; cursor:pointer; transition:all .15s}
+.copy:hover{color:var(--cyan); border-color:var(--cyan)} .copy.done{color:var(--green); border-color:var(--green)}
+pre{margin:0; padding:14px 16px; overflow:auto; font-family:var(--mono); font-size:13px; line-height:1.6; color:var(--text)}
+pre .c{color:var(--text-faint)} pre .s{color:var(--green)} pre .b{color:var(--brass-bright)}
+.note{border:1px solid var(--line); border-radius:var(--r-sm); background:var(--cyan-dim); padding:14px 16px 14px 18px; margin:18px 0; position:relative; max-width:var(--maxw)}
+.note::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--cyan)}
+.note .lbl{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--cyan); display:block; margin-bottom:5px}
+.note p:last-child{margin-bottom:0}
+.cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin:22px 0}
+.card{border:1px solid var(--line); border-radius:var(--r-sm); background:var(--ink-raised); padding:18px}
+.card h4{font-family:var(--display); font-size:18px; margin:0 0 6px; color:var(--text); font-weight:600}
+.card p{font-size:14.5px; color:var(--text-dim); margin:0}
+.tbl{width:100%; border-collapse:collapse; margin:18px 0; font-size:14.5px}
+.tbl th,.tbl td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line-soft); vertical-align:top}
+.tbl th{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-faint); font-weight:500}
+.tbl td:first-child{color:var(--text); font-weight:600}
+.journal{position:relative; margin-top:24px; padding-left:30px}
+.journal::before{content:""; position:absolute; left:6px; top:6px; bottom:6px; width:2px; background:linear-gradient(var(--brass), transparent)}
+.entry{position:relative; margin-bottom:14px}
+.entry::before{content:""; position:absolute; left:-30px; top:18px; width:11px; height:11px; border-radius:50%; background:var(--ink); border:2px solid var(--brass); box-shadow:0 0 0 4px var(--ink)}
+.entry > summary{list-style:none; cursor:pointer; padding:12px 16px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--ink-raised); display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.entry > summary::-webkit-details-marker{display:none}
+.entry > summary:hover{border-color:var(--brass)}
+.entry .rev{font-family:var(--mono); font-size:12px; color:var(--brass); font-weight:600}
+.entry .date{font-family:var(--mono); font-size:11.5px; color:var(--text-faint)}
+.entry .ttl{font-weight:600; color:var(--text); flex:1; min-width:140px}
+.entry .marker{margin-left:0}
+.entry-body{padding:8px 4px 6px 4px}
+.chip{font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border-radius:99px; border:1px solid currentColor}
+.chip.adr{color:var(--brass)} .chip.win{color:var(--green)} .chip.bug{color:var(--clay)} .chip.note{color:var(--cyan)}
+.adr-block{border-left:2px solid var(--line); padding:2px 0 2px 14px; margin:12px 0}
+.adr-block .h{font-family:var(--mono); font-size:12px; color:var(--text); margin-bottom:4px} .adr-block .h b{color:var(--brass)}
+.adr-block .meta{font-size:13.5px; color:var(--text-dim); margin:3px 0}
+.adr-block .meta b{color:var(--text-dim); font-family:var(--mono); font-size:11px; letter-spacing:.04em; text-transform:uppercase}
+footer{max-width:1180px; margin:60px auto 0; padding:24px; border-top:1px solid var(--line-soft); font-family:var(--mono); font-size:12px; color:var(--text-faint)}
+::selection{background:var(--brass-dim); color:var(--brass-bright)}
+:focus-visible{outline:2px solid var(--cyan); outline-offset:2px; border-radius:2px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <span class="brand"><span class="dot"></span> ScreenSaver</span>
+    <div class="topbar-actions">
+      <button class="btn" id="expand"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg> Expand all</button>
+      <button class="btn" id="theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg> Theme</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+<div class="layout">
+
+  <nav class="toc" aria-label="Contents">
+    <p class="toc-title">Contents</p>
+    <a href="#purpose">Purpose</a>
+    <a href="#concept">Concept</a>
+    <a href="#reference">Reference</a>
+    <a href="#demos">Demos</a>
+    <a href="#qa">QA &amp; testing</a>
+    <a href="#journal">Journal</a>
+  </nav>
+
+  <main>
+    <!-- ====== MASTHEAD ====== -->
+    <header class="masthead">
+      <p class="eyebrow">Windows desktop suite &middot; album-cover mosaic screensaver</p>
+      <h1>ScreenSaver</h1>
+      <p class="lede">A four-part Windows suite that turns a local music library into a living mosaic of album covers, surfaces the currently-playing track as a focal tile, and optionally mirrors that cover to a desktop wallpaper, a lock screen, a web page, and a Stream Deck.</p>
+      <div class="meta-row">
+        <span><span class="k">status</span> &nbsp;<span class="badge draft">draft</span></span>
+        <span><span class="k">owner</span> &nbsp;<span class="v">Ant</span></span>
+        <span><span class="k">stack</span> &nbsp;<span class="v">.NET 10 &middot; WinForms &middot; SMTC &middot; Stream Deck SDK</span></span>
+        <span><span class="k">rev</span> &nbsp;<span class="v">1 &middot; 2026-06-26</span></span>
+      </div>
+    </header>
+
+    <!-- ====== 01 PURPOSE ====== -->
+    <section id="purpose">
+      <div class="sec-head"><span class="sec-num">01</span><h2>Purpose</h2></div>
+      <p>ScreenSaver is a personal Windows 10/11 desktop app (not a hosted service) that displays your album art as a full-screen mosaic when the machine goes idle. It scans a music folder once, caches each album's cover, and from then on tiles those covers across every monitor, crossfading one at a time. While anything is playing through <a href="https://learn.microsoft.com/uwp/api/windows.media.control" target="_blank" rel="noopener">Windows System Media Transport Controls</a> (SMTC) or iTunes, the playing album rises into a central focal tile and its mosaic tile pulses.</p>
+      <p>It is built as a <strong>suite of four cooperating components</strong> plus a small launcher: the screensaver itself, an <strong>AlbumCoverFinder</strong> scan-and-settings UI, an always-on <strong>tray companion</strong> (wallpaper, lock screen, Discord presence, LAN web page, locked-deck art), and a <strong>Stream Deck plugin</strong> that paints the current cover across one, four, or nine keys. It serves one user (the operator) on one machine; everything is local, with no cloud dependency.</p>
+    </section>
+
+    <!-- ====== 02 CONCEPT ====== -->
+    <section id="concept">
+      <div class="sec-head"><span class="sec-num">02</span><h2>Concept</h2></div>
+      <p>Four front-ends draw from two shared engines. A cover cache on disk and a now-playing monitor are the only state; each component reads them and renders in its own way. Settings live in one registry key so a change made in the Finder UI propagates to everything without a restart.</p>
+
+      <div class="cards">
+        <div class="card"><h4>ScreenSaver</h4><p>The <code>.scr</code>. One owner-drawn form per monitor: a centered grid of square tiles, one swapping at a time, with the SMTC/iTunes track as a focal cover. <code>ScreenSaver/</code>.</p></div>
+        <div class="card"><h4>AlbumCoverFinder</h4><p>WinForms scanner and settings hub. Walks a folder, extracts cover art and tags, writes the cache, and owns every tab of configuration. <code>AlbumCoverFinder/</code>.</p></div>
+        <div class="card"><h4>Tray companion</h4><p>Always-on. Desktop wallpaper, lock-screen image, Discord Rich Presence, a LAN web page, and locked-deck artwork. The sole iTunes poller. <code>ScreenSaver.Tray/</code>.</p></div>
+        <div class="card"><h4>Stream Deck plugin</h4><p>Spreads the playing cover across 1, 4, or 9 keys; each key runs its own media control on press. <code>ScreenSaver.StreamDeck/</code>.</p></div>
+      </div>
+
+      <p>A fifth project, <code>ScreenSaver.Launcher/</code>, is a tiny stub that exists only so the Windows screensaver picker can list us. See the deploy fold below.</p>
+
+      <span class="kicker">The album-cover-finding pipeline</span>
+      <h3>Scan once, then everyone reads the cache</h3>
+      <p>AlbumCoverFinder walks a music folder recursively, and for each unique <code>artist+album</code> it resizes the embedded artwork to 384x384 and writes a numbered PNG plus a small JSON sidecar to <code>%USERPROFILE%\ScreenSaverCovers\</code>. Every other component opens that same folder read-only.</p>
+
+      <details class="fold why">
+        <summary><span class="tag">Why</span><span class="s-label">Per-file PNG cache instead of a serialized blob</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>The pre-2026 build serialized a <code>Dictionary&lt;string,Image&gt;</code> with <a href="https://learn.microsoft.com/dotnet/standard/serialization/binaryformatter-security-guide" target="_blank" rel="noopener">BinaryFormatter</a> to a single <code>.bin</code> in the user profile. BinaryFormatter was removed in .NET 9, so the format had to change. A folder of plain PNGs (<code>index.txt</code> maps line N to <code>N.png</code>) is human-debuggable, deletable per cover, needs no serialization library, and lets readers lazily decode only the covers they show. See <code>AlbumCoverFinder/CoverMgr.cs</code>.</p>
+          <p>Deduplication is cheap-first: the scanner only computes a SHA256 of the original artwork bytes when a second cover shows the same byte length, so byte-identical art (compilations, re-releases) is skipped without hashing every file. The length and hash ride in the JSON sidecar (<code>AlbumCoverFinder/AlbumMetadata.cs</code>).</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Deep dive</span><span class="s-label">Cache layout, lazy decode, and iTunes-only covers</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Layout under <code>%USERPROFILE%\ScreenSaverCovers\</code>: <code>index.txt</code> (one <code>artist+album</code> key per line, line N maps to <code>N.png</code>), the <code>N.png</code> covers at 384x384, optional <code>N.json</code> metadata sidecars (artist, album, year, genre, cover byte length, cover hash), and <code>blocklist.txt</code> (hidden keys, one per line).</p>
+          <p>Read-only consumers (screensaver, tray, plugin) construct <code>AlbumCoverMgr(lazyLoad: true)</code>: startup records each key's PNG path without decoding, and each cover is decoded on first display and cached. The Finder loads eager because it edits and re-saves. Tags come from <a href="https://github.com/mono/taglib-sharp" target="_blank" rel="noopener">TagLib#</a>, so any format it supports works (MP3, FLAC, M4A, AAC, OGG, OPUS, WMA, WAV, AIFF, APE).</p>
+          <p>Albums whose audio files carry no embedded art (the art lives only in iTunes' cache) are captured opportunistically: when the Tray polls iTunes and finds a cover that is not in the cache, it calls <code>AlbumCoverMgr.AddCover</code>, which appends a new PNG plus sidecar, so the album joins the mosaic after it plays once.</p>
+        </div>
+      </details>
+
+      <span class="kicker">How the components fit</span>
+      <h3>Two shared engines, one settings key</h3>
+      <p>The cover cache (<code>AlbumCoverMgr</code>) and the now-playing monitor (<code>NowPlayingMonitor</code>) are the shared engines. The monitor source file physically lives in <code>ScreenSaver/</code> and is compile-linked into the Tray and the plugin so there is one implementation. The genre/year filter and every other preference live in <code>HKCU\SOFTWARE\Demo_ScreenSaver</code>, written by the Finder and re-read by the others (the Tray re-reads once a minute).</p>
+
+      <details class="fold why">
+        <summary><span class="tag">Why</span><span class="s-label">One linked monitor source, not a shared library or three copies</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>The SMTC and iTunes logic is delicate (see the now-playing deep dive) and must behave identically everywhere. Rather than a shared assembly (extra project, versioning) or copy-paste (drift), the csproj for the Tray and the plugin pull the file in with <code>&lt;Compile Include="..\ScreenSaver\NowPlayingMonitor.cs" Link="..." /&gt;</code>. One source, three assemblies: a fix on the screensaver side reaches the others for free. The monitor takes a <code>Func&lt;string,Image&gt;</code> cover lookup rather than a hard dependency on the cache, which is what makes the link clean.</p>
+        </div>
+      </details>
+
+      <span class="kicker">Now playing</span>
+      <h3>SMTC for everything, a single iTunes poller for iTunes</h3>
+      <p>For any app that publishes a media session (Spotify, Apple Music, foobar2000, VLC, browsers) the monitor subscribes to SMTC and reports the active track only while it is actually <em>playing</em>. iTunes for Windows does not publish to SMTC, so it is read over COM, but by exactly one process: the Tray polls, and the screensaver and plugin watch a pair of files the Tray writes.</p>
+
+      <details class="fold why">
+        <summary><span class="tag">Why</span><span class="s-label">Only the Tray touches iTunes COM, and never launches it</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>The Store build of iTunes does not expose its automation object to outside processes (<code>GetActiveObject</code> returns <code>MK_E_UNAVAILABLE</code>), so the only way to read it is <code>CreateInstance</code>, which <em>launches</em> iTunes if it is not already running. A naive poll resurrected iTunes after the user closed it and blocked its quit with "a script is using it." The fix (in <code>NowPlayingMonitor.PollItunes</code>): never attach unless <code>iTunes.exe</code> is already running, kill any instance a poll accidentally spawns during the shutdown race, release every COM reference and force a GC each poll, and stand aside entirely while an Apple mobile device is plugged in (USB <code>VID_05AC&amp;PID_12xx</code>) so device sync is never disturbed. Funneling all of this through one process means iTunes' single-threaded apartment is hit once, not three times. Full history in <code>.claude/notes.md</code>.</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Deep dive</span><span class="s-label">The IPC files and why the PNG is written before the JSON</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>The Tray (the writer) publishes two files in <code>%LOCALAPPDATA%\ScreenSaver\</code>: <code>nowplaying.png</code> (the current cover) and <code>nowplaying.json</code> (<code>{title, artist, album}</code>). Readers run a <code>FileSystemWatcher</code> on the JSON. The PNG is written first, then the JSON, because a reader without its own cover cache (the plugin) pairs the JSON's metadata with the PNG on disk: if the JSON landed first, the deck would render one track behind. Both files are written temp-then-move so no reader sees a half-written file.</p>
+          <p>Each source records its last value; <code>RecomputeAndRaise</code> makes iTunes win when present and SMTC fill in otherwise. <code>NowPlayingInfo.FromItunes</code> tags the source so the plugin can show iTunes art exclusively while the screensaver shows whatever is playing.</p>
+        </div>
+      </details>
+
+      <span class="kicker">Rendering</span>
+      <h3>The screensaver is owner-drawn, with no child controls</h3>
+      <p>Each monitor gets one <code>ScreenSaverForm</code> that paints the whole mosaic, the focal cover, and every caption itself, into a single back-buffer bitmap that is blitted in one pass. There are no child tile controls.</p>
+
+      <details class="fold why">
+        <summary><span class="tag">Why</span><span class="s-label">Owner-draw replaced child PictureBoxes after a black-screen bug</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>On this machine's .NET 10 runtime, child controls of the screensaver form never composite to the screen: the form's own surface paints, but its children (any control type, any DPI mode, any window style) do not. The mosaic was therefore re-implemented as owner-draw. <code>FadingPictureBox.cs</code> now holds <code>FadingTile</code>, a plain renderer (not a <code>Control</code>) with the same transition math and a <code>Paint(Graphics, Rectangle)</code> method. A single 16 ms animation timer advances transitions and highlight pulses, invalidating only the dirty tile rects so a 4K surface is not cleared every frame. The full investigation is in <code>.claude/notes.md</code> (2026-05-29).</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Deep dive</span><span class="s-label">Grid, transitions, gestures, and focus</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>The grid starts at the top-left. With a configured column count, tile size is screen width / columns; at the default (CoversWide 0) tiles are 256 px and the column count is ceil-rounded so the edges clip a partial tile rather than leave a black bar. Four transition effects (Blink, FadeToBlack, Merge, Flip) live in <code>FadingTile</code>; the swap cadence is <code>GapBetweenTransitionsMs + TransitionDurationMs</code> (Flip, 3000 ms, gap 1000 ms by default, so roughly one swap every four seconds).</p>
+          <p>Gestures depart from a stock screensaver: a mouse move over 5 px raises a manage overlay (cursor plus a hint and the hovered album's caption) rather than exiting; left-click a tile to exit; Shift-click to pin a tile as the focal cover; right-click to hide an album (it joins <code>blocklist.txt</code> and is replaced); any key exits. Because a saver launched indirectly is denied foreground, <code>OnShown</code> grabs keyboard focus with the AttachThreadInput trick, and <code>WndProc</code> tears down on any key while still passing the message to <code>DefWindowProc</code> so media/volume keys keep their system action on the way out.</p>
+        </div>
+      </details>
+
+      <span class="kicker">The Stream Deck plugin</span>
+      <h3>One action becomes one tile of an NxN cover wall</h3>
+      <p>The user drops the same <strong>Cover Tile</strong> action on 1, 4, or 9 keys and tells each key its grid size, its (row, column), and what media control to run on press. Every instance subscribes to one shared monitor, crops its slice of the cover, and pushes a 144x144 PNG to its key. The plugin mirrors iTunes only.</p>
+
+      <details class="fold why">
+        <summary><span class="tag">Why</span><span class="s-label">Pages are bundled profiles, and a key-press dismisses the saver by PostMessage</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>The <a href="https://docs.elgato.com/streamdeck/sdk/introduction/getting-started/" target="_blank" rel="noopener">Stream Deck SDK</a> never lets a plugin flip pages of a user profile; the only navigation is <code>switchToProfile</code>, restricted to profiles bundled with the plugin. So "pages" are four single-page bundled profiles, "Covers 1" through "Covers 4", and the Next/Previous-page actions switch between them by name with wrap-around.</p>
+          <p>A deck press cannot reach the screensaver through the input system (SMTC successes are API calls; injected media keys are grabbed system-wide by the SMTC service; a plain injected key only lands on the foreground window, which the saver routinely is not). So on every press the plugin enumerates the saver's visible top-level windows and <code>PostMessage</code>s <code>WM_KEYDOWN</code> directly; PostMessage ignores focus and the saver exits on any key. No IPC handshake, no saver-side change. History in <code>.claude/notes.md</code>.</p>
+        </div>
+      </details>
+
+      <span class="kicker">Deploy</span>
+      <h3>Registry pointer plus a System32 stub, not a self-contained .scr</h3>
+      <p>The real screensaver is a framework-dependent app under <code>%LOCALAPPDATA%\ScreenSaver\App\</code>. Windows is pointed at it through <code>HKCU\Control Panel\Desktop\SCRNSAVE.EXE</code>, and a tiny launcher in <code>System32</code> restores the picker dropdown entry.</p>
+
+      <details class="fold why">
+        <summary><span class="tag">Why</span><span class="s-label">A 55 MB self-contained .scr in System32 tripped antivirus</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>The earlier deploy copied a compressed, self-contained, single-file <code>.scr</code> into <code>System32</code>. That combination (large compressed payload, System32, unsigned) reads as a packer to Bitdefender and got blocked. The current model publishes the screensaver framework-dependent (a small exe plus a few DLLs, which looks like any .NET app) into <code>%LOCALAPPDATA%</code> and points <code>SCRNSAVE.EXE</code> at it: idle activation runs it with no admin. Because the Windows picker only lists <code>.scr</code> files in System32, <code>ScreenSaver.Launcher</code> drops a ~160 KB framework-dependent, uncompressed stub at <code>System32\ScreenSaver.scr</code> that reads <code>HKCU\SOFTWARE\Demo_ScreenSaver\ScreenSaverPath</code> and forwards the args. That one file needs UAC; everything else is per-user. See the <code>install</code> skill and each csproj for the publish flags.</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Deep dive</span><span class="s-label">Locked-deck artwork over raw USB HID</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>When Windows locks, the Elgato app sleeps the deck and stops dispatching to plugins, so the websocket path cannot keep the cover on the keys. The Tray's <code>LockScreenDeck</code> instead talks to the deck over raw USB HID via <a href="https://github.com/OpenMacroBoard/StreamDeckSharp" target="_blank" rel="noopener">StreamDeckSharp</a>, which bypasses the Elgato app entirely; during the locked window it is effectively the sole writer. On <code>SessionLock</code> it opens the deck, reads <code>LockDeckMode</code>, and on a timer composes a full-deck frame (the cover centered and letterboxed over a blurred, darkened fill), slices it per key, and pushes each slice. On <code>SessionUnlock</code> it disposes the board so the Elgato app reclaims it. Diagnostics land in <code>%LOCALAPPDATA%\ScreenSaver\deck-lock.log</code>. The technique was reverse-engineered from BarRaider's screensaver plugin (notes.md, 2026-06-17).</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ====== 03 REFERENCE ====== -->
+    <section id="reference">
+      <div class="sec-head"><span class="sec-num">03</span><h2>Reference</h2></div>
+      <p class="dim">Exact, neutral facts: projects, build outputs, registry keys, file layout, endpoints, the plugin manifest, and dependencies. Collapsed until needed.</p>
+
+      <details class="fold">
+        <summary><span class="tag">Reference</span><span class="s-label">Projects and build outputs</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Solution: <code>ScreenSaver.sln</code> (five projects). Each csproj redirects <code>bin</code>/<code>obj</code> into a top-level <code>out\&lt;project&gt;\</code> folder to dodge an antivirus path block left over from earlier single-file builds. The <code>build</code> skill is the source of truth for the exact commands.</p>
+          <table class="tbl">
+            <thead><tr><th>Project</th><th>Target framework</th><th>Output</th></tr></thead>
+            <tbody>
+              <tr><td>ScreenSaver</td><td>net10.0-windows10.0.19041.0</td><td>Framework-dependent multi-file <code>ScreenSaver.exe</code>; deployed to <code>%LOCALAPPDATA%\ScreenSaver\App\</code></td></tr>
+              <tr><td>ScreenSaver.Launcher</td><td>net10.0-windows</td><td>~160 KB single-file framework-dependent <code>ScreenSaver.exe</code>; the <code>System32\ScreenSaver.scr</code> picker stub</td></tr>
+              <tr><td>AlbumCoverFinder</td><td>net10.0-windows10.0.19041.0</td><td><code>AlbumCoverFinder.exe</code> (references TagLibSharp)</td></tr>
+              <tr><td>ScreenSaver.Tray</td><td>net10.0-windows10.0.19041.0</td><td><code>ScreenSaver.Tray.exe</code> (+ <code>www\index.html</code>)</td></tr>
+              <tr><td>ScreenSaver.StreamDeck</td><td>net10.0-windows10.0.19041.0</td><td>Self-contained single-file <code>com.blashyrkh.screensaver.exe</code> (x64; the deck host is not .NET)</td></tr>
+            </tbody>
+          </table>
+          <p>All four windowed projects target the <code>10.0.19041.0</code> Windows SDK so they can see SMTC and the lock-screen WinRT APIs. The screensaver forces <code>PerMonitorV2</code> DPI awareness (csproj plus a P/Invoke in <code>Program.cs</code>) so the mosaic stays crisp on mixed-DPI multi-monitor setups.</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Reference</span><span class="s-label">Settings: HKCU\SOFTWARE\Demo_ScreenSaver</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Written by AlbumCoverFinder, read by every component. Source: <code>AlbumCoverFinder/ScreensaverSettings.cs</code> and <code>CoverFilter.cs</code>.</p>
+          <table class="tbl">
+            <thead><tr><th>Value</th><th>Type</th><th>Default</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td>CoversWide</td><td>DWORD</td><td>12</td><td>Mosaic columns; 0 = native 256 px tiles</td></tr>
+              <tr><td>TransitionEffect</td><td>DWORD</td><td>3 (Flip)</td><td>0 Blink, 1 FadeToBlack, 2 Merge, 3 Flip</td></tr>
+              <tr><td>TransitionDurationMs</td><td>DWORD</td><td>3000</td><td>Transition length, clamped [1000, 10000]; ignored for Blink</td></tr>
+              <tr><td>GapBetweenTransitionsMs</td><td>DWORD</td><td>1000</td><td>Quiet gap between swaps, minimum 1000</td></tr>
+              <tr><td>AlbumCap</td><td>DWORD</td><td>0</td><td>Max albums scanned; 0 = unlimited</td></tr>
+              <tr><td>SwapIntervalMs</td><td>DWORD</td><td>1000</td><td>Legacy; kept for back-compat. Cadence now derives from gap + transition</td></tr>
+              <tr><td>FilterGenre</td><td>String</td><td>(empty)</td><td>Substring genre filter applied to every cover pick</td></tr>
+              <tr><td>FilterYearMin / FilterYearMax</td><td>DWORD</td><td>0</td><td>Inclusive year range; 0 disables that bound</td></tr>
+              <tr><td>WallpaperEnabled</td><td>DWORD</td><td>0</td><td>Tray desktop-wallpaper auto-refresh (opt-in)</td></tr>
+              <tr><td>WallpaperIntervalMinutes</td><td>DWORD</td><td>5</td><td>Wallpaper refresh period</td></tr>
+              <tr><td>LockScreenEnabled</td><td>DWORD</td><td>0</td><td>Tray lock-screen auto-refresh (opt-in)</td></tr>
+              <tr><td>LockScreenIntervalMinutes</td><td>DWORD</td><td>60</td><td>Lock-screen refresh period, minimum 5</td></tr>
+              <tr><td>DiscordAppId</td><td>String</td><td>(empty)</td><td>Discord application id; empty or "0" disables Rich Presence</td></tr>
+              <tr><td>LockDeckMode</td><td>DWORD</td><td>0 (NowPlaying)</td><td>What the Tray draws on the locked deck: 0 NowPlaying, 1 Picture, 2 Gif, 3 Off</td></tr>
+              <tr><td>LockDeckImagePath</td><td>String</td><td>(empty)</td><td>File for LockDeckMode Picture / Gif</td></tr>
+              <tr><td>ScreenSaverPath</td><td>String</td><td>(set by install)</td><td>Absolute path to the App exe; read by the System32 stub and the Tray "Test"</td></tr>
+              <tr><td>FinderPath</td><td>String</td><td>(set by install)</td><td>Absolute path to AlbumCoverFinder.exe; read by the Tray menu</td></tr>
+            </tbody>
+          </table>
+          <p>Also written by the <code>install</code> skill under <code>HKCU\Control Panel\Desktop</code>: <code>SCRNSAVE.EXE</code> (points at the System32 stub, or the App exe as a fallback), <code>ScreenSaveActive</code> = 1, and <code>ScreenSaveTimeOut</code> = 600 (only if unset). The Tray autostart is <code>HKCU\...\CurrentVersion\Run\ScreenSaverTray</code>.</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Reference</span><span class="s-label">On-disk file layout</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <table class="tbl">
+            <thead><tr><th>Path</th><th>Contents</th></tr></thead>
+            <tbody>
+              <tr><td><code>%USERPROFILE%\ScreenSaverCovers\</code></td><td><code>index.txt</code>, <code>N.png</code> (384x384), <code>N.json</code> sidecars, <code>blocklist.txt</code></td></tr>
+              <tr><td><code>%LOCALAPPDATA%\ScreenSaver\</code></td><td><code>App\</code>, <code>Tray\</code>, <code>Finder\</code> installs; <code>nowplaying.json</code> / <code>nowplaying.png</code> IPC; <code>screensaver.log</code>, <code>deck-lock.log</code>; the prince GIF</td></tr>
+              <tr><td><code>%APPDATA%\ScreenSaver\</code></td><td><code>wallpaper.bmp</code>, <code>lockscreen.jpg</code> (regenerated each refresh, safe to delete)</td></tr>
+              <tr><td><code>%APPDATA%\Elgato\StreamDeck\Plugins\com.blashyrkh.screensaver.sdPlugin\</code></td><td>Installed plugin (exe + <code>sdPlugin\</code> manifest, icons, profiles, inspector)</td></tr>
+              <tr><td><code>C:\Windows\System32\ScreenSaver.scr</code></td><td>The launcher stub (only when the picker entry is installed; needs UAC)</td></tr>
+            </tbody>
+          </table>
+          <p>Logs are gitignored. The screensaver truncates <code>screensaver.log</code> at each launch, so it always reflects the most recent run.</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Reference</span><span class="s-label">Screensaver arguments and gestures</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Standard screensaver command line (<code>ScreenSaver/Program.cs</code>): <code>/s</code> full-screen on every monitor; <code>/p &lt;hwnd&gt;</code> preview in the picker's thumbnail; <code>/c</code> or no args opens AlbumCoverFinder as the settings dialog.</p>
+          <table class="tbl">
+            <thead><tr><th>Gesture</th><th>Result</th></tr></thead>
+            <tbody>
+              <tr><td>Mouse move &gt; 5 px</td><td>Enters manage mode: shows the cursor, a hint, and the hovered album caption. Does not exit.</td></tr>
+              <tr><td>Left-click a tile / background</td><td>Exits (or unpins, if pinned).</td></tr>
+              <tr><td>Shift-click a tile</td><td>Pins it as the focal cover.</td></tr>
+              <tr><td>Right-click a tile</td><td>Hides that album (adds to the blocklist) and replaces it. Shows a toast.</td></tr>
+              <tr><td>Any key</td><td>Exits (character keys via KeyPress; function/media/volume keys via WndProc).</td></tr>
+            </tbody>
+          </table>
+          <p>Hidden albums are managed from AlbumCoverFinder's Hidden tab (unhide one or all).</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Reference</span><span class="s-label">Tray HTTP companion (localhost:9999)</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Loopback only by default (<code>ScreenSaver.Tray/HttpCompanion.cs</code>). LAN access needs a one-time <code>netsh http add urlacl url=http://+:9999/ user=Everyone</code> as admin and a switch to <code>http://+:9999/</code>, left manual on purpose.</p>
+          <table class="tbl">
+            <thead><tr><th>Endpoint</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>GET /</code></td><td>Browser companion page (search + cover grid), served from <code>www\index.html</code></td></tr>
+              <tr><td><code>GET /now-playing.json</code></td><td><code>{ playing, title, artist, album, year, genre }</code></td></tr>
+              <tr><td><code>GET /now-playing.png</code></td><td>PNG of the current cover, or 204 if nothing playing</td></tr>
+              <tr><td><code>GET /random.png</code></td><td>PNG of a random cover from the filtered library</td></tr>
+              <tr><td><code>GET /index.json</code></td><td>Array of <code>{ index, artist, album, year, genre }</code> over the filtered pool</td></tr>
+              <tr><td><code>GET /cover/{n}.png</code></td><td>PNG of cover <code>n</code> within the filtered pool</td></tr>
+              <tr><td><code>POST /hide?index={n}</code></td><td>Blocklists cover <code>n</code> (same as a right-click); returns 204. Indices renumber after.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Reference</span><span class="s-label">Stream Deck plugin manifest and key actions</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Source: <code>ScreenSaver.StreamDeck/sdPlugin/manifest.json</code>. UUID <code>com.blashyrkh.screensaver</code>, version 1.1.0, author Ant, category ScreenSaver, <code>SDKVersion</code> 2, minimum Stream Deck software 6.5, Windows 10+. One action, <code>com.blashyrkh.screensaver.covertile</code> ("Cover Tile", Keypad controller). Four bundled single-page profiles, "Covers 1" through "Covers 4", model the pager.</p>
+          <p>Per-key settings (property inspector, <code>property_inspector/inspector.html</code>): grid size (1/2/3), row, column, on-press action, "Show the action badge", and "On page" (only for the pager actions). On-press actions (<code>CoverTileAction.KeyAction</code>):</p>
+          <table class="tbl">
+            <thead><tr><th>Action</th><th>Behavior</th></tr></thead>
+            <tbody>
+              <tr><td>None</td><td>Visual tile only; press does nothing</td></tr>
+              <tr><td>PlayPause / Next / Previous / Stop</td><td>SMTC session call first; on refusal, the global media key</td></tr>
+              <tr><td>VolumeUp / VolumeDown / Mute</td><td>Global media key (<code>SendInput</code>) directly</td></tr>
+              <tr><td>NextPage / PreviousPage</td><td>Switch to the neighbouring "Covers" profile, wrapping at the ends</td></tr>
+            </tbody>
+          </table>
+          <p>Built on <a href="https://github.com/BarRaider/streamdeck-tools" target="_blank" rel="noopener">BarRaider's streamdeck-tools</a> (the .NET wrapper around the WebSocket plugin protocol). Distribution and Marketplace submission go through <a href="https://maker.elgato.com" target="_blank" rel="noopener">Maker Console</a> with the <a href="https://www.npmjs.com/package/@elgato/cli" target="_blank" rel="noopener">Stream Deck CLI</a> (<code>streamdeck validate</code> / <code>streamdeck pack</code>), which supersedes the legacy DistributionTool.</p>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary><span class="tag">Reference</span><span class="s-label">Dependencies</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <table class="tbl">
+            <thead><tr><th>Package</th><th>Version</th><th>Used by / for</th></tr></thead>
+            <tbody>
+              <tr><td><a href="https://github.com/mono/taglib-sharp" target="_blank" rel="noopener">TagLibSharp</a></td><td>2.3.0</td><td>AlbumCoverFinder: cover art + tag extraction</td></tr>
+              <tr><td><a href="https://github.com/Lachee/discord-rpc-csharp" target="_blank" rel="noopener">DiscordRichPresence</a></td><td>1.3.0.28</td><td>Tray: Discord Rich Presence</td></tr>
+              <tr><td><a href="https://github.com/OpenMacroBoard/StreamDeckSharp" target="_blank" rel="noopener">StreamDeckSharp</a></td><td>6.1.0</td><td>Tray: locked-deck raw-HID drawing</td></tr>
+              <tr><td><a href="https://github.com/BarRaider/streamdeck-tools" target="_blank" rel="noopener">streamdeck-tools</a></td><td>6.0.0</td><td>Plugin: Stream Deck WebSocket protocol</td></tr>
+              <tr><td><a href="https://www.newtonsoft.com/json" target="_blank" rel="noopener">Newtonsoft.Json</a></td><td>13.0.3</td><td>Plugin: settings JObjects</td></tr>
+              <tr><td><a href="https://learn.microsoft.com/dotnet/api/system.drawing" target="_blank" rel="noopener">System.Drawing.Common</a></td><td>9.0.0</td><td>Plugin: tile bitmaps</td></tr>
+            </tbody>
+          </table>
+          <p>The screensaver and Finder reference only the framework (WinForms, <code>System.Text.Json</code>, the Windows SDK projection). Tools: <code>tools/IconGen/</code> procedurally regenerates the icon set into <code>icons\</code>; <code>tools/prince-screensaver/make_gif.py</code> builds a 480x272 cover-rotation GIF for the Elgato app's own "Screen Saver" image (requires <a href="https://pillow.readthedocs.io/" target="_blank" rel="noopener">Pillow</a>; <code>python make_gif.py --artist "Name" --seconds 2</code>).</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ====== 04 DEMOS ====== -->
+    <section id="demos">
+      <div class="sec-head"><span class="sec-num">04</span><h2>Demos</h2></div>
+      <p>Each station is one concrete thing to do on a Windows box with the .NET 10 SDK installed, and what you should see. Run from the project root.</p>
+
+      <details class="fold demo">
+        <summary><span class="tag">Demo</span><span class="s-label">Build the whole suite</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Invoke the project's <code>build</code> skill, or run its commands by hand. You should get five exes under <code>out\</code> with zero errors.</p>
+          <div class="code"><div class="code-head"><span class="fn">powershell</span><button class="copy">copy</button></div>
+<pre>dotnet build ScreenSaver.sln -c Release -nologo
+dotnet publish ScreenSaver.StreamDeck\ScreenSaver.StreamDeck.csproj -c Release -r win-x64 --self-contained -nologo
+dotnet publish ScreenSaver\ScreenSaver.csproj -c Release -nologo
+dotnet publish ScreenSaver.Launcher\ScreenSaver.Launcher.csproj -c Release -r win-x64 --no-self-contained -nologo</pre></div>
+        </div>
+      </details>
+
+      <details class="fold demo">
+        <summary><span class="tag">Demo</span><span class="s-label">Scan a music folder into the cache</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Launch AlbumCoverFinder, go to the Scan tab, point it at a folder of tagged audio, and click "Parse folder for albums." The status line counts albums as it scans; when it finishes, <code>%USERPROFILE%\ScreenSaverCovers\</code> holds <code>index.txt</code> and numbered PNGs.</p>
+          <div class="code"><div class="code-head"><span class="fn">powershell</span><button class="copy">copy</button></div>
+<pre>.\out\AlbumCoverFinder\bin\Release\net10.0-windows10.0.19041.0\publish\AlbumCoverFinder.exe</pre></div>
+        </div>
+      </details>
+
+      <details class="fold demo">
+        <summary><span class="tag">Demo</span><span class="s-label">See the now-playing focal tile</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Start playing a track in Spotify, a browser, or any SMTC source, then launch the screensaver in full-screen mode. The playing album appears as a centered 2x2 focal cover over the mosaic, and its mosaic tile pulses a soft yellow border. Move the mouse to raise the manage hint; press any key or left-click to exit.</p>
+          <div class="code"><div class="code-head"><span class="fn">powershell</span><button class="copy">copy</button></div>
+<pre><span class="c"># /s runs it full-screen; the saver exits on any key or click</span>
+.\out\ScreenSaver\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\ScreenSaver.exe /s</pre></div>
+        </div>
+      </details>
+
+      <details class="fold demo">
+        <summary><span class="tag">Demo</span><span class="s-label">Build a 3x3 cover wall on a Stream Deck</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Install the plugin (the <code>install</code> skill, or copy <code>sdPlugin\</code> plus the published exe into <code>%APPDATA%\Elgato\StreamDeck\Plugins\com.blashyrkh.screensaver.sdPlugin\</code> and restart Stream Deck). Drag <strong>Cover Tile</strong> onto nine keys; on each, set grid size 3 and its row/column 0..2; set each key's on-press action. Play something in iTunes: the cover spans all nine keys and each key still runs its own control. The Tray must be running for iTunes art to reach the deck.</p>
+        </div>
+      </details>
+
+      <details class="fold demo">
+        <summary><span class="tag">Demo</span><span class="s-label">Hide an album, then browse the web companion</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>With the Tray running, open <code>http://localhost:9999/</code> (or the tray menu's "Open web companion"). Search the library, click a cover for a lightbox. In the screensaver, right-click any tile to hide that album; it disappears from the mosaic, the wallpaper, the lock screen, and the web list at once, and shows up under AlbumCoverFinder's Hidden tab.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ====== 05 QA & TESTING ====== -->
+    <section id="qa">
+      <div class="sec-head"><span class="sec-num">05</span><h2>QA &amp; testing</h2></div>
+
+      <h3>How to run it</h3>
+      <p>Prerequisites: Windows 10 build 19041 (May 2020) or newer (required for SMTC and the lock-screen API) and the <a href="https://dotnet.microsoft.com/download" target="_blank" rel="noopener">.NET 10 SDK</a>. Build with the <code>build</code> skill, install with the <code>install</code> skill (both under <code>.claude/skills/</code>). Installation is per-machine, no external installer.</p>
+      <div class="code"><div class="code-head"><span class="fn">powershell</span><button class="copy">copy</button></div>
+<pre><span class="c"># from the repo root</span>
+git clone https://github.com/BlashyrkhRavenDark/ScreenSaver.git
+cd ScreenSaver
+<span class="c"># build (see the build skill for the full five-output sequence)</span>
+dotnet build ScreenSaver.sln -c Release -nologo
+<span class="c"># install onto this machine (asks which components; one step needs UAC)</span>
+<span class="c"># run the install skill, then pick ScreenSaver in Windows screensaver settings</span></pre></div>
+      <p>The <code>install</code> skill deploys the screensaver to <code>%LOCALAPPDATA%\ScreenSaver\App\</code> and points <code>SCRNSAVE.EXE</code> at it, installs the Tray with autostart, the plugin into the Elgato folder, an AlbumCoverFinder Start-menu shortcut, and (with UAC) the System32 picker stub.</p>
+
+      <h3>How to test it, basic to advanced</h3>
+      <p class="dim">There is no automated test project in the solution. Verification is manual and log-driven; the levels below go from cheapest to gnarliest.</p>
+      <details class="fold"><summary><span class="tag">Basic</span><span class="s-label">Build and smoke</span><span class="marker"></span></summary>
+        <div class="panel-body"><p>Run the <code>build</code> skill and confirm the five expected exes exist under <code>out\</code> with zero errors. Launch <code>AlbumCoverFinder.exe</code>: it opens on the Scan tab with a welcome message (empty cache) or a count (populated). Scan a small folder and confirm covers appear in <code>%USERPROFILE%\ScreenSaverCovers\</code>.</p></div></details>
+      <details class="fold"><summary><span class="tag">Intermediate</span><span class="s-label">Verify on-screen rendering and now-playing</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Launch <code>ScreenSaver.exe /s</code> and confirm a full mosaic with crossfading tiles. The reliable automated check is a real screen capture (<code>Graphics.CopyFromScreen</code>): a black 4K frame is roughly 17 KB, a real mosaic is several MB. <code>Form.DrawToBitmap</code> is useless here because it bypasses the on-screen path that was the original bug.</p>
+          <p>Play an SMTC source and confirm the focal cover and the pulsing highlight. Watch <code>%LOCALAPPDATA%\ScreenSaver\screensaver.log</code> for the run (DPI awareness, grid size, focus acquired, WndProc dismiss).</p>
+          <div class="note"><span class="lbl">Bitdefender</span><p>Put any P/Invoke-heavy capture or key-injection in a <code>.ps1</code> file and run <code>powershell -NoProfile -File x.ps1</code>; AMSI blocks the same code on the command line. Use COM <code>SendKeys('{F15}')</code> rather than a SendInput P/Invoke to poke the saver. Details in <code>.claude/notes.md</code>.</p></div>
+        </div></details>
+      <details class="fold"><summary><span class="tag">Advanced</span><span class="s-label">Deck dismiss, iTunes hygiene, locked deck</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <p>Deck dismiss: launch the saver, let another window take foreground, then press a deck key and confirm the saver exits (the plugin <code>PostMessage</code>s <code>WM_KEYDOWN</code> to each saver window; verify via the plugin's Stream Deck log and the saver's WndProc line).</p>
+          <p>iTunes hygiene: with the Tray running and iTunes playing, confirm covers update; then close iTunes and confirm it stays closed and does not relaunch (a duplicate may flash for under 10 s during the shutdown race, which is expected). Re-test with an iPhone plugged in: polling stands aside entirely.</p>
+          <p>Locked deck: set a LockDeckMode in AlbumCoverFinder, press Win+L, and check <code>%LOCALAPPDATA%\ScreenSaver\deck-lock.log</code> for the open result and draw cadence.</p>
+        </div></details>
+
+      <h3>The harnesses, and how to drive them</h3>
+      <details class="fold"><summary><span class="tag">Reference</span><span class="s-label">Diagnostics and manual harness</span><span class="marker"></span></summary>
+        <div class="panel-body">
+          <table class="tbl">
+            <thead><tr><th>Layer</th><th>Covers</th><th>How</th></tr></thead>
+            <tbody>
+              <tr><td>Build skill</td><td>All five projects compile and produce outputs</td><td><code>.claude/skills/build/SKILL.md</code></td></tr>
+              <tr><td>Screensaver log</td><td>Launch path, DPI, grid, focus, dismissal</td><td><code>%LOCALAPPDATA%\ScreenSaver\screensaver.log</code> (truncated each run)</td></tr>
+              <tr><td>Deck-lock log</td><td>Locked-deck mode, open result, draw errors</td><td><code>%LOCALAPPDATA%\ScreenSaver\deck-lock.log</code></td></tr>
+              <tr><td>Plugin log</td><td>Key presses, SMTC vs fallback, page switches, dismiss</td><td>Stream Deck's own plugin log (BarRaider <code>Logger</code>)</td></tr>
+              <tr><td>Screen capture</td><td>Whether the mosaic actually composites</td><td>PerMonitorV2-aware <code>.ps1</code> using <code>CopyFromScreen</code> (notes.md)</td></tr>
+              <tr><td>Fixtures</td><td>Seed data</td><td>Any folder of tagged audio; the cache at <code>%USERPROFILE%\ScreenSaverCovers\</code></td></tr>
+            </tbody>
+          </table>
+          <p class="dim">To add a check, prefer extending a skill or adding a log line over a new test project; this is a single-user desktop app verified on the operator's box.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ====== 06 JOURNAL ====== -->
+    <section id="journal">
+      <div class="sec-head"><span class="sec-num">06</span><h2>Journal</h2></div>
+      <p class="dim">Newest first, append-only. Nest a short ADR for real decisions; supersede rather than rewrite.</p>
+
+      <!-- JOURNAL_TOP: new entries go directly below this line, above older ones. -->
+      <div class="journal">
+        <details class="entry" open>
+          <summary>
+            <span class="rev">rev 1</span><span class="date">2026-06-26</span>
+            <span class="ttl">Living document created for the four-component suite</span>
+            <span class="chip note">note</span>
+            <span class="marker"></span>
+          </summary>
+          <div class="entry-body">
+            <p>First Logbook document for ScreenSaver, written against the code as it stands: the .NET 10 screensaver, AlbumCoverFinder, the Tray companion, the Stream Deck plugin, and the System32 launcher stub. It captures the current cache format, registry surface, now-playing pipeline, deploy model, and gestures, and supersedes the in-repo README, the per-component READMEs, IDEAS.md, the prince-screensaver README, and the 2026-05-27 council artifacts, all of which were migrated here and retired. The forward-looking ideas were moved to the Planned fold below. The ADRs record decisions that were made earlier and are evidenced in <code>.claude/notes.md</code> and the code.</p>
+
+            <div class="adr-block">
+              <div class="h"><b>ADR-001</b> &middot; Rebuild on .NET 10 with TagLib# and a per-file PNG cache &middot; <span style="color:var(--green)">accepted</span></div>
+              <div class="meta"><b>Context</b> The original build was .NET Framework 4.7.2, read ID3 tags through an external <code>id3lib</code> solution, and serialized covers with BinaryFormatter (removed in .NET 9). A 2026-05-27 design review pushed toward an SMTC-aware, multi-format rewrite.</div>
+              <div class="meta"><b>Decision</b> We will target .NET 10, read all tags through TagLib#, drop id3lib and BinaryFormatter entirely, and store each cover as a numbered PNG with a JSON sidecar under ScreenSaverCovers.</div>
+              <div class="meta"><b>Consequences</b> Any TagLib#-supported format works, the cache is debuggable and lazily decodable, and there is no deserialization risk; upgraders from pre-2026 must delete the old <code>.bin</code> and rescan.</div>
+            </div>
+
+            <div class="adr-block">
+              <div class="h"><b>ADR-002</b> &middot; Owner-draw the screensaver, no child controls &middot; <span style="color:var(--green)">accepted</span></div>
+              <div class="meta"><b>Context</b> After the .NET 10 overhaul, child controls of the screensaver form never composited on this machine; the screen was black despite a healthy run log.</div>
+              <div class="meta"><b>Decision</b> We will render the entire UI in <code>ScreenSaverForm.OnPaint</code> into a back-buffer and blit it, with <code>FadingTile</code> as a non-control renderer and a single animation timer invalidating only dirty rects.</div>
+              <div class="meta"><b>Consequences</b> Rendering is reliable and transitions are smooth on 4K; the tradeoff is that all hit-testing and layout are manual rather than handed to WinForms.</div>
+            </div>
+
+            <div class="adr-block">
+              <div class="h"><b>ADR-003</b> &middot; Deploy via SCRNSAVE.EXE plus a System32 stub, framework-dependent &middot; <span style="color:var(--green)">accepted</span></div>
+              <div class="meta"><b>Context</b> A self-contained, compressed, single-file <code>.scr</code> in System32 was flagged as a packer by Bitdefender, blocking installation.</div>
+              <div class="meta"><b>Decision</b> We will publish the screensaver framework-dependent into <code>%LOCALAPPDATA%</code>, point <code>HKCU\Control Panel\Desktop\SCRNSAVE.EXE</code> at it, and ship a tiny uncompressed launcher in System32 only to restore the picker entry.</div>
+              <div class="meta"><b>Consequences</b> No AV false positive and only one UAC step (the stub); the cost is a second tiny project and the registry pointer that the picker depends on.</div>
+            </div>
+
+            <div class="adr-block">
+              <div class="h"><b>ADR-004</b> &middot; One iTunes COM poller; dismiss the saver by PostMessage, not IPC &middot; <span style="color:var(--green)">accepted</span></div>
+              <div class="meta"><b>Context</b> Store iTunes does not publish to SMTC and refuses external attach except via launch-prone <code>CreateInstance</code>; and a deck press cannot reach the saver through the input system. An earlier shared named-event dismiss handshake was built and then removed to keep the suite simple.</div>
+              <div class="meta"><b>Decision</b> We will let only the Tray poll iTunes (attach only when already running, reap COM each poll, stand aside during device sync) and publish <code>nowplaying.png</code>/<code>.json</code> for the others to watch; the plugin dismisses the saver by posting <code>WM_KEYDOWN</code> directly to its windows.</div>
+              <div class="meta"><b>Consequences</b> No process-coordination layer and clean iTunes quit; a duplicate iTunes can flash briefly during its shutdown race, and SMTC-only sources are tagged so the deck can stay iTunes-exclusive.</div>
+            </div>
+          </div>
+        </details>
+
+        <details class="entry">
+          <summary>
+            <span class="rev">planned</span><span class="date">open</span>
+            <span class="ttl">Ideas not yet built (migrated from IDEAS.md)</span>
+            <span class="chip note">note</span>
+            <span class="marker"></span>
+          </summary>
+          <div class="entry-body">
+            <details class="fold">
+              <summary><span class="tag">Planned</span><span class="s-label">Roadmap: open feature ideas</span><span class="marker"></span></summary>
+              <div class="panel-body">
+                <p>Forward-looking only; none of these exist in the code yet. Kept so they are not mistaken for current behavior.</p>
+                <ul>
+                  <li><strong>Color-extracted ambient lighting</strong>: sample the playing cover and push to Govee / Hue / Razer Chroma / OpenRGB. Highest "wow per line"; Govee LAN is the no-account path.</li>
+                  <li><strong>Beat-reactive mosaic</strong>: WASAPI loopback FFT drives a gentle tile pulse. Pairs with ambient lighting; watch CPU.</li>
+                  <li><strong>Visualizer mode</strong>: a full-screen single-cover plus visualizer alternative to the mosaic.</li>
+                  <li><strong>Last.fm scrobble overlay</strong>: "you have played this album N times this year" on the focal tile.</li>
+                  <li><strong>Tray cover-of-the-day icon</strong>: a rotating tray glyph; folds into the existing Tray.</li>
+                  <li><strong>Cover-database sharing</strong>: export/import <code>ScreenSaverCovers\</code> as a zip.</li>
+                </ul>
+                <p>The done items from IDEAS.md (click-to-pin, wallpaper, Discord, deck transport, NxN grid, genre/year filter, sibling thumbnail, LAN companion, playing-album highlight, web companion, lock screen) are live and documented above. The "decade tour" idea was shipped briefly and removed at the operator's request.</p>
+              </div>
+            </details>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
+</div>
+</div>
+
+<footer>ScreenSaver &middot; living document &middot; built on the Logbook convention. Update on every meaningful change.</footer>
+
+<script>
+(function(){"use strict";
+  var root=document.documentElement, tbtn=document.getElementById('theme');
+  if(tbtn){tbtn.addEventListener('click',function(){var c=root.getAttribute('data-theme'); if(!c){c=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';} root.setAttribute('data-theme', c==='dark'?'light':'dark');});}
+  var ebtn=document.getElementById('expand');
+  if(ebtn){ebtn.addEventListener('click',function(){var f=document.querySelectorAll('details.fold, details.entry'); var any=Array.prototype.some.call(f,function(d){return !d.open;}); f.forEach(function(d){d.open=any;}); ebtn.querySelector('svg').style.transform=any?'rotate(180deg)':''; ebtn.lastChild.textContent=any?' Collapse all':' Expand all';});}
+  document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var p=b.closest('.code').querySelector('pre'); var t=p?p.innerText:''; var done=function(){b.textContent='copied'; b.classList.add('done'); setTimeout(function(){b.textContent='copy'; b.classList.remove('done');},1400);}; if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done).catch(function(){});}else{try{var x=document.createElement('textarea'); x.value=t; document.body.appendChild(x); x.select(); document.execCommand('copy'); document.body.removeChild(x); done();}catch(e){}}});});
+  if('IntersectionObserver' in window){var links=document.querySelectorAll('.toc a[href^="#"]'); var map={}; links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;}); var obs=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove('active');}); var a=map[e.target.id]; if(a)a.classList.add('active');}});},{rootMargin:'-20% 0px -70% 0px'}); document.querySelectorAll('main section[id]').forEach(function(s){obs.observe(s);});}
+})();
+</script>
+</body>
+</html>
