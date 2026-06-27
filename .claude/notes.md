@@ -406,3 +406,19 @@ early - touching NO iTunes COM - whenever an Apple mobile device is connected,
 detected via SetupAPI CM_Get_Device_ID_List with CM_GETIDLIST_FILTER_PRESENT for
 USB\VID_05AC&PID_12xx (reliable "present" signal; registry Enum is stale, driver
 service varies WinUSB/usbaapl64). Covers hold last value while a phone is plugged in.
+
+## Resolved: the OTHER iTunes COM poller was iTunesControllerPro (2026-06-24)
+
+The iTunes won't-close / relaunch / freeze saga had a SECOND cause beyond our Tray:
+the third-party Elgato plugin **iTunesControllerPro.exe** (jp.tsuteto "iTunes
+Controller Pro") - also a CreateInstance-polling iTunes COM client that relaunched
+iTunes (verified: with our Tray dead, a killed iTunes came back with parent svchost/
+DCOM while only iTunesControllerPro was a live COM client). The operator UNINSTALLED
+it (our ScreenSaver suite is intended as its replacement/improvement). With it gone
+AND our Tray fixed (gate on running + device-backoff + reap), iTunes now closes and
+STAYS closed - verified: killed iTunes, stayed gone 10s with the Tray running, no
+relaunch. Deck iTunes covers now come from our Cover Tile plugin's nowplaying feed.
+
+The iPhone disconnect/reconnect-during-sync is a SEPARATE hardware issue (cable /
+USB port / power), not our software - USB selective suspend was disabled as one fix;
+the rest is cable/port/driver (the phone's interface is on WinUSB not usbaapl64).
