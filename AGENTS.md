@@ -13,6 +13,7 @@ A four-part Windows suite that turns a local music library into a living mosaic 
 - **Before changing rendering or the mosaic**: read the owner-draw "Rendering" section of `docs/index.html` and [ADR-0002](docs/adr/0002-owner-draw-no-child-controls.md); the full black-screen investigation is in `.claude/notes.md` (2026-05-29).
 - **Before touching now-playing or iTunes**: read the "Now playing" section and the IPC deep-dive in `docs/index.html`, [ADR-0004](docs/adr/0004-one-itunes-poller-postmessage-dismiss.md), and `.claude/notes.md`; the PNG-before-JSON ordering and the iTunes COM hygiene are load-bearing.
 - **Before changing deploy, the registry, or System32**: read the "Deploy" section of `docs/index.html`, [ADR-0003](docs/adr/0003-scrnsave-stub-deploy.md), and the `install` skill; the Windows picker only lists `.scr` files in System32, so `SCRNSAVE.EXE` must point at the stub when it is installed.
+- **Related documents**: the four architecture decisions are numbered markdown files under [docs/adr/](docs/adr/) ([0001](docs/adr/0001-net10-taglib-png-cache.md) .NET 10 + PNG cache, [0002](docs/adr/0002-owner-draw-no-child-controls.md) owner-draw, [0003](docs/adr/0003-scrnsave-stub-deploy.md) deploy, [0004](docs/adr/0004-one-itunes-poller-postmessage-dismiss.md) iTunes + dismiss); they are the only other markdown in `docs/`. This page is the human source of truth, and the generated `AGENTS.md` at the repo root is the agent front door.
 
 ## Decisions
 

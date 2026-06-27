@@ -178,7 +178,7 @@ footer{max-width:1180px; margin:60px auto 0; padding:24px; border-top:1px solid 
         <span><span class="k">status</span> &nbsp;<span class="badge draft">draft</span></span>
         <span><span class="k">owner</span> &nbsp;<span class="v">Ant</span></span>
         <span><span class="k">stack</span> &nbsp;<span class="v">.NET 10 &middot; WinForms &middot; SMTC &middot; Stream Deck SDK</span></span>
-        <span><span class="k">rev</span> &nbsp;<span class="v">1 &middot; 2026-06-26</span></span>
+        <span><span class="k">rev</span> &nbsp;<span class="v">2 &middot; 2026-06-27</span></span>
       </div>
     </header>
 
@@ -205,6 +205,7 @@ footer{max-width:1180px; margin:60px auto 0; padding:24px; border-top:1px solid 
       <div class="sec-head"><span class="sec-num">01</span><h2>Purpose</h2></div>
       <p>ScreenSaver is a personal Windows 10/11 desktop app (not a hosted service) that displays your album art as a full-screen mosaic when the machine goes idle. It scans a music folder once, caches each album's cover, and from then on tiles those covers across every monitor, crossfading one at a time. While anything is playing through <a href="https://learn.microsoft.com/uwp/api/windows.media.control" target="_blank" rel="noopener">Windows System Media Transport Controls</a> (SMTC) or iTunes, the playing album rises into a central focal tile and its mosaic tile pulses.</p>
       <p>It is built as a <strong>suite of four cooperating components</strong> plus a small launcher: the screensaver itself, an <strong>AlbumCoverFinder</strong> scan-and-settings UI, an always-on <strong>tray companion</strong> (wallpaper, lock screen, Discord presence, LAN web page, locked-deck art), and a <strong>Stream Deck plugin</strong> that paints the current cover across one, four, or nine keys. It serves one user (the operator) on one machine; everything is local, with no cloud dependency.</p>
+      <p>The concept is borrowed from the old iTunes album-art screensaver on macOS. A short video demo is on <a href="https://www.youtube.com/watch?v=YUvwzdiCS0g" target="_blank" rel="noopener">YouTube</a>.</p>
     </section>
 
     <!-- ====== 02 CONCEPT ====== -->
@@ -577,6 +578,18 @@ dotnet build ScreenSaver.sln -c Release -nologo
       <!-- JOURNAL_TOP: new entries go directly below this line, above older ones. -->
       <div class="journal">
         <details class="entry" open>
+          <summary>
+            <span class="rev">rev 2</span><span class="date">2026-06-27</span>
+            <span class="ttl">Retired the root README; migrated its last nuggets here</span>
+            <span class="chip note">note</span>
+            <span class="marker"></span>
+          </summary>
+          <div class="entry-body">
+            <p>Reconciled the repo against this living document. The root <code>README.md</code> only repeated the suite description already in Purpose and the Agent brief, so it was deleted; its two unique nuggets, the macOS iTunes-screensaver inspiration and the YouTube video demo, were moved into Purpose first. <code>AGENTS.md</code> was regenerated from this page. The living document, the four ADRs under <code>docs/adr/</code>, the generated <code>AGENTS.md</code>, and <code>CLAUDE.md</code> are now the only docs in the repo.</p>
+          </div>
+        </details>
+
+        <details class="entry">
           <summary>
             <span class="rev">rev 1</span><span class="date">2026-06-26</span>
             <span class="ttl">Living document created for the four-component suite</span>

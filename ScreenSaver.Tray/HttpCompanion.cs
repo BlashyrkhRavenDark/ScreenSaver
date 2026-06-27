@@ -42,7 +42,7 @@ namespace ScreenSaver.Tray
             m_oListener = new HttpListener();
             // Loop-back only by default to avoid the netsh urlacl admin requirement.
             // Users who want LAN access can switch to http://+:9999/ after running
-            // netsh once (documented in the tray README).
+            // netsh once (documented in docs/index.html, the Tray HTTP companion fold).
             m_oListener.Prefixes.Add("http://localhost:9999/");
             try { m_oListener.Start(); }
             catch { m_oListener = null; return; }
