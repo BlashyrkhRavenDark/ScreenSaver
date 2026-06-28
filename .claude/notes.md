@@ -407,6 +407,35 @@ detected via SetupAPI CM_Get_Device_ID_List with CM_GETIDLIST_FILTER_PRESENT for
 USB\VID_05AC&PID_12xx (reliable "present" signal; registry Enum is stale, driver
 service varies WinUSB/usbaapl64). Covers hold last value while a phone is plugged in.
 
+** SUPERSEDED 2026-06-28 - the device-backoff above was REMOVED. See next section. **
+
+## Device-backoff REMOVED - sync fault was physical, not our COM (2026-06-28)
+
+The "stand aside while a phone is connected" backoff was built on the theory that our
+iTunes COM polling flaked the device sync. That theory is now DISPROVEN. With the
+phone confirmed connected, the failing device showed up as a phantom in Device Manager
+and pnputil:
+    USB\VID_0000&PID_0002 - "Unknown USB Device (Device Descriptor Request Failed)"
+    Problem Code 43 (0x2B) CM_PROB_FAILED_POST_START
+VID_0000 = the device never completed USB enumeration at all, so it never even became
+an Apple device for any driver (or our COM) to touch. Pure physical/USB-layer fault.
+The operator fixed it by UNPLUG + REPLUG (reseat) - sync then went through cleanly.
+=> cable/port/reseat issue, fully independent of our software.
+
+Consequence of the now-removed backoff was the inverse complaint: "I have to choose
+between the Stream Deck updating and my phone syncing" - because the backoff froze the
+now-playing feed (stale deck) for as long as a phone was plugged in. No longer.
+
+REMOVED from NowPlayingMonitor.cs: the `if (AppleMobileDeviceConnected()) return;`
+guard in PollItunes AND the whole AppleMobileDeviceConnected() helper + its cfgmgr32
+P/Invokes (CM_Get_Device_ID_List*) + CM_GETIDLIST_FILTER_* consts (now dead). The Tray
+polls iTunes normally during a sync; the deck stays live. Rebuilt + redeployed Tray.
+If a sync is EVER shown to flake specifically because of our read-only COM poll (no
+evidence it does), reintroduce a guard - but it is not needed today.
+
+If the phone disconnects mid-sync again: it is Code 43 / cable / port (try a known-good
+MFi data cable + a rear USB 2.0 port direct to the board), NOT this software.
+
 ## Resolved: the OTHER iTunes COM poller was iTunesControllerPro (2026-06-24)
 
 The iTunes won't-close / relaunch / freeze saga had a SECOND cause beyond our Tray:

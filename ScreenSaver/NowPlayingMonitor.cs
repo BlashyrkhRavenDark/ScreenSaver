@@ -331,14 +331,12 @@ namespace ScreenSaver
             //      instance (the shutdown-window race), release + kill that instance.
             // When iTunes is genuinely running, CreateInstance attaches to it without
             // spawning anything (verified), so this is transparent in the normal case.
-
-            // Stand aside while an iPhone/iPad is connected: iTunes COM polling can flake
-            // iTunes' device handshake/sync, so we touch NOTHING (no attach, no GC, no
-            // spawn-check) while a device is plugged in. Now-playing covers hold their
-            // last value until it's unplugged. The previous poll already released and
-            // reaped our COM references, so iTunes is entirely ours-free during the sync.
-            if (AppleMobileDeviceConnected())
-                return;
+            //
+            // NOTE: we used to stand aside entirely while an iPhone/iPad was connected,
+            // on the theory that our COM polling flaked iTunes' device sync. That proved
+            // wrong - the sync drops were a physical USB fault (Code 43 "Device Descriptor
+            // Request Failed", fixed by reseating the cable), independent of our read-only
+            // automation. So we keep polling during a sync and the deck stays live.
 
             int[] before = ItunesPids();
             if (before.Length == 0)
@@ -457,42 +455,6 @@ namespace ScreenSaver
                 // from closing. This is why per-poll ReleaseComObject alone wasn't enough.
                 try { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); } catch { }
             }
-        }
-
-        /// <summary>
-        /// Returns the already-running iTunes Application via the COM Running Object
-        /// Table, or null if iTunes isn't running. Unlike CreateInstance/CoCreate this
-        /// NEVER launches iTunes - so closing iTunes makes it stay closed, and a
-        /// half-shut-down iTunes (process lingering, COM object already revoked) is
-        /// reported as gone rather than being relaunched.
-        /// </summary>
-        // Apple mobile devices (iPhone/iPad/iPod) enumerate under USB\VID_05AC with a
-        // PID in the 0x12xx family. We detect a CURRENTLY-CONNECTED one via SetupAPI's
-        // present-device list (CM_GETIDLIST_FILTER_PRESENT) - the only reliable signal:
-        // the registry Enum tree keeps stale entries, and the bound driver service
-        // varies (WinUSB vs usbaapl64). No COM, no process spawn.
-        private const uint CM_GETIDLIST_FILTER_ENUMERATOR = 0x1;
-        private const uint CM_GETIDLIST_FILTER_PRESENT = 0x100;
-
-        [System.Runtime.InteropServices.DllImport("cfgmgr32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-        private static extern int CM_Get_Device_ID_List_Size(out uint pulLen, string pszFilter, uint ulFlags);
-
-        [System.Runtime.InteropServices.DllImport("cfgmgr32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-        private static extern int CM_Get_Device_ID_List(string pszFilter, char[] buffer, uint bufferLen, uint ulFlags);
-
-        private static bool AppleMobileDeviceConnected()
-        {
-            try
-            {
-                uint flags = CM_GETIDLIST_FILTER_PRESENT | CM_GETIDLIST_FILTER_ENUMERATOR;
-                if (CM_Get_Device_ID_List_Size(out uint len, "USB", flags) != 0 || len == 0) return false;
-                var buf = new char[len];
-                if (CM_Get_Device_ID_List("USB", buf, len, flags) != 0) return false;
-                // Multi-string of PRESENT (currently-connected) USB device IDs.
-                // iPhone/iPad/iPod enumerate as VID_05AC&PID_12xx.
-                return new string(buf).IndexOf("VID_05AC&PID_12", StringComparison.OrdinalIgnoreCase) >= 0;
-            }
-            catch { return false; }
         }
 
         /// <summary>Current iTunes.exe process IDs (empty array if none / on error).</summary>
