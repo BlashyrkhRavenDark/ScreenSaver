@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Must match AlbumCoverFinder's TFM: it is a net10.0-windows WinForms project
+         (Screen, System.Drawing, Microsoft.Win32.Registry), so the test project has
+         to be windows-targeted too or the ProjectReference is rejected. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Mirror the sibling projects: redirect bin/obj under out\ (BitDefender flags
+         exes at the default bin path on this box; see AlbumCoverFinder.csproj). -->
+    <BaseOutputPath>..\out\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>..\out\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AlbumCoverFinder\AlbumCoverFinder.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- Golden-master expected outputs: committed, human-approved once, copied next
+       to the test assembly so DescribeLayout can be diffed against them at runtime. -->
+  <ItemGroup>
+    <None Include="Expected\**\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

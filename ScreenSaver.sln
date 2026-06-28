@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.0.0
@@ -14,6 +14,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenSaver.Tray", "ScreenSaver.Tray\ScreenSaver.Tray.csproj", "{D5A8B1F0-9C7E-4D2A-AB1F-2C8E4D7A91B2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenSaver.Launcher", "ScreenSaver.Launcher\ScreenSaver.Launcher.csproj", "{E6B2C3D4-8A91-4F5E-BC7D-9E3F1A2B4C8D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenSaver.Tests", "ScreenSaver.Tests\ScreenSaver.Tests.csproj", "{0C8D0555-82EC-418C-83BD-B5E2244C80E7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -75,6 +77,18 @@ Global
 		{E6B2C3D4-8A91-4F5E-BC7D-9E3F1A2B4C8D}.Release|x64.ActiveCfg = Release|x64
 		{E6B2C3D4-8A91-4F5E-BC7D-9E3F1A2B4C8D}.Release|x64.Build.0 = Release|x64
 		{E6B2C3D4-8A91-4F5E-BC7D-9E3F1A2B4C8D}.Release|x86.ActiveCfg = Release|x64
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Debug|x64.Build.0 = Debug|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Debug|x86.Build.0 = Debug|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Release|x64.ActiveCfg = Release|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Release|x64.Build.0 = Release|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Release|x86.ActiveCfg = Release|Any CPU
+		{0C8D0555-82EC-418C-83BD-B5E2244C80E7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

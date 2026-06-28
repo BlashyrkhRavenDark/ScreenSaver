@@ -74,30 +74,39 @@ namespace AlbumCoverFinder
         public LockDeckMode LockDeckMode { get; set; } = LockDeckMode.NowPlaying;
         public string LockDeckImagePath { get; set; } = string.Empty;
 
-        private const string RegistryPath = "SOFTWARE\\Demo_ScreenSaver";
+        // Default HKCU location. Both Load and Save also accept an explicit path so
+        // tests can point at a throwaway subkey (SOFTWARE\Demo_ScreenSaver_Tests)
+        // instead of snapshotting the operator's live key. Production callers use the
+        // no-arg overloads and hit DefaultRegistryPath unchanged.
+        private const string DefaultRegistryPath = "SOFTWARE\\Demo_ScreenSaver";
 
-        public static ScreensaverSettings Load()
+        public static ScreensaverSettings Load() => Load(DefaultRegistryPath);
+
+        public static ScreensaverSettings Load(string registryPath)
         {
             var s = new ScreensaverSettings();
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryPath))
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(registryPath))
                 {
                     if (key != null)
                     {
                         s.AlbumCap = ReadInt(key, "AlbumCap", 0);
-                        s.SwapIntervalMs = Math.Max(100, ReadInt(key, "SwapIntervalMs", 1000));
-                        s.CoversWide = Math.Max(0, ReadInt(key, "CoversWide", 12));
-                        s.Effect = (TransitionEffect)Math.Max(0, Math.Min(3, ReadInt(key, "TransitionEffect", (int)TransitionEffect.Flip)));
-                        s.TransitionDurationMs = Math.Max(1000, Math.Min(10000, ReadInt(key, "TransitionDurationMs", 3000)));
-                        s.GapBetweenTransitionsMs = Math.Max(1000, ReadInt(key, "GapBetweenTransitionsMs", 1000));
+                        s.SwapIntervalMs = ReadInt(key, "SwapIntervalMs", 1000);
+                        s.CoversWide = ReadInt(key, "CoversWide", 12);
+                        s.Effect = (TransitionEffect)ReadInt(key, "TransitionEffect", (int)TransitionEffect.Flip);
+                        s.TransitionDurationMs = ReadInt(key, "TransitionDurationMs", 3000);
+                        s.GapBetweenTransitionsMs = ReadInt(key, "GapBetweenTransitionsMs", 1000);
                         s.WallpaperEnabled = ReadBool(key, "WallpaperEnabled", false);
-                        s.WallpaperIntervalMinutes = Math.Max(1, ReadInt(key, "WallpaperIntervalMinutes", 5));
+                        s.WallpaperIntervalMinutes = ReadInt(key, "WallpaperIntervalMinutes", 5);
                         s.LockScreenEnabled = ReadBool(key, "LockScreenEnabled", false);
-                        s.LockScreenIntervalMinutes = Math.Max(5, ReadInt(key, "LockScreenIntervalMinutes", 60));
+                        s.LockScreenIntervalMinutes = ReadInt(key, "LockScreenIntervalMinutes", 60);
                         s.DiscordAppId = (key.GetValue("DiscordAppId") as string) ?? string.Empty;
-                        s.LockDeckMode = (LockDeckMode)Math.Max(0, Math.Min(3, ReadInt(key, "LockDeckMode", (int)LockDeckMode.NowPlaying)));
+                        s.LockDeckMode = (LockDeckMode)ReadInt(key, "LockDeckMode", (int)LockDeckMode.NowPlaying);
                         s.LockDeckImagePath = (key.GetValue("LockDeckImagePath") as string) ?? string.Empty;
+                        // Clamp on read, exactly as the old inline Math.Max/Min did. Save()
+                        // writes raw, so the round-trip only holds for in-range inputs.
+                        Clamp(s);
                     }
                 }
             }
@@ -105,11 +114,33 @@ namespace AlbumCoverFinder
             return s;
         }
 
-        public void Save()
+        /// <summary>
+        /// Clamps the numeric settings to their documented bounds. Pure (no registry),
+        /// so the clamp contract can be tested without touching HKCU. Load() applies it
+        /// after reading the raw values, reproducing the old inline clamps exactly.
+        /// Returns the same instance for convenience.
+        /// </summary>
+        public static ScreensaverSettings Clamp(ScreensaverSettings s)
+        {
+            if (s == null) return null;
+            s.SwapIntervalMs = Math.Max(100, s.SwapIntervalMs);
+            s.CoversWide = Math.Max(0, s.CoversWide);
+            s.Effect = (TransitionEffect)Math.Max(0, Math.Min(3, (int)s.Effect));
+            s.TransitionDurationMs = Math.Max(1000, Math.Min(10000, s.TransitionDurationMs));
+            s.GapBetweenTransitionsMs = Math.Max(1000, s.GapBetweenTransitionsMs);
+            s.WallpaperIntervalMinutes = Math.Max(1, s.WallpaperIntervalMinutes);
+            s.LockScreenIntervalMinutes = Math.Max(5, s.LockScreenIntervalMinutes);
+            s.LockDeckMode = (LockDeckMode)Math.Max(0, Math.Min(3, (int)s.LockDeckMode));
+            return s;
+        }
+
+        public void Save() => Save(DefaultRegistryPath);
+
+        public void Save(string registryPath)
         {
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RegistryPath))
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(registryPath))
                 {
                     if (key == null) return;
                     key.SetValue("AlbumCap", AlbumCap, RegistryValueKind.DWord);

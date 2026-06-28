@@ -39,14 +39,19 @@ namespace AlbumCoverFinder
             return true;
         }
 
-        private const string RegistryPath = "SOFTWARE\\Demo_ScreenSaver";
+        // Default HKCU location, shared with ScreensaverSettings. Both registry
+        // methods also accept an explicit path so tests can use a throwaway subkey
+        // instead of snapshotting the live key; production uses the no-arg overloads.
+        private const string DefaultRegistryPath = "SOFTWARE\\Demo_ScreenSaver";
 
-        public static CoverFilter LoadFromRegistry()
+        public static CoverFilter LoadFromRegistry() => LoadFromRegistry(DefaultRegistryPath);
+
+        public static CoverFilter LoadFromRegistry(string registryPath)
         {
             var f = new CoverFilter();
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryPath))
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(registryPath))
                 {
                     if (key != null)
                     {
@@ -62,11 +67,13 @@ namespace AlbumCoverFinder
             return f;
         }
 
-        public void SaveToRegistry()
+        public void SaveToRegistry() => SaveToRegistry(DefaultRegistryPath);
+
+        public void SaveToRegistry(string registryPath)
         {
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RegistryPath))
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(registryPath))
                 {
                     if (key == null) return;
                     key.SetValue("FilterGenre", Genre ?? string.Empty);
